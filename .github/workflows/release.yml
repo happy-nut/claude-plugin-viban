@@ -18,12 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Make scripts executable
         run: chmod +x bin/viban scripts/check-deps.sh
-
-      - name: Configure npm for provenance
-        run: npm config set //registry.npmjs.org/:_authToken ""
 
       - name: Publish to npm
         run: npm publish --provenance --access public
