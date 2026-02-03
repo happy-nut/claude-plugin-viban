@@ -1,16 +1,45 @@
 # viban
 
-**Vi**sual Kan**ban** - Terminal-based Kanban board TUI for AI-human collaborative issue tracking.
+**Vi**sual Kan**ban** - A simple, lightweight local Kanban board for AI-human collaborative issue tracking.
 
 [![CI](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml/badge.svg)](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml)
 [![npm version](https://badge.fury.io/js/%40happy-nut%2Fclaude-plugin-viban.svg)](https://www.npmjs.com/package/@happy-nut/claude-plugin-viban)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## Why viban?
+
+- **No Worktree Complexity** - Just a single JSON file. No git worktrees, no complex setup.
+- **Lightweight & Fast** - Pure shell script with minimal dependencies. Starts instantly.
+- **Local First** - Your issues stay in your repo. No external services or accounts needed.
+- **AI-Native** - Built for Claude Code integration from the ground up.
+
+## Recommended Workflow
+
+The most effective way to use viban is with **multiple terminal sessions**:
+
+```
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│   Session 1     │  │   Session 2     │  │   Session 3     │
+│                 │  │                 │  │                 │
+│  Product QA     │  │  Issue Work     │  │  viban TUI      │
+│  + /task        │  │  + /assign      │  │                 │
+│                 │  │                 │  │  (always open)  │
+│  Find bugs,     │  │  Pick & resolve │  │  Monitor board  │
+│  register issues│  │  issues         │  │  in real-time   │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+- **Session 1**: QA your product, find issues, run `/task` to register them
+- **Session 2**: Run `/assign` to pick the next issue and resolve it
+- **Session 3**: Keep `viban` TUI open to monitor the board
+
+This separation keeps your workflow clean and prevents context switching.
+
 ## Features
 
 - **3-Column Kanban Board**: `backlog` → `in_progress` → `review` → `done`
 - **Priority Levels**: P0 (critical) to P3 (low priority)
-- **Type Tags**: bug, feat, chore, refactor, docs, test
+- **Type Tags**: bug, feat, chore, refactor
 - **TUI Navigation**: Interactive terminal UI with gum
 - **Parallel Sessions**: Multiple Claude Code sessions can work simultaneously
 - **Session Assignment**: Prevents duplicate work across parallel agents
