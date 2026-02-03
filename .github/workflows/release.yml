@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   release:
@@ -24,7 +23,9 @@ jobs:
         run: chmod +x bin/viban scripts/check-deps.sh
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
