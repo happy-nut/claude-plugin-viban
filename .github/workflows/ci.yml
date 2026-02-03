@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install gum jq
+
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list
+          sudo apt update && sudo apt install -y gum jq
+
+      - name: Make script executable
+        run: chmod +x bin/viban scripts/check-deps.sh
+
+      - name: Test viban help
+        run: ./bin/viban help
+
+      - name: Test in git repo
+        run: |
+          mkdir test-repo && cd test-repo
+          git init
+          git config user.email "test@test.com"
+          git config user.name "Test"
+          ../bin/viban add "Test issue" "Test description" P2 feat
+          ../bin/viban list

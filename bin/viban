@@ -1,0 +1,1242 @@
+#!/bin/zsh
+# viban - Vibe Kanban TUI (Notion-style)
+# Requires: gum (brew install gum), jq
+setopt EXTENDED_GLOB
+
+# ============================================================
+# Dependency Check (Early exit with helpful messages)
+# ============================================================
+check_dependencies() {
+    local missing=0
+
+    if ! command -v jq &>/dev/null; then
+        echo "❌ jq not found"
+        [[ "$OSTYPE" == "darwin"* ]] && echo "   Install: brew install jq"
+        [[ "$OSTYPE" == "linux"* ]] && echo "   Install: apt install jq"
+        missing=1
+    fi
+
+    if ! command -v gum &>/dev/null; then
+        echo "❌ gum not found"
+        [[ "$OSTYPE" == "darwin"* ]] && echo "   Install: brew install gum"
+        [[ "$OSTYPE" == "linux"* ]] && echo "   Install: See https://github.com/charmbracelet/gum#installation"
+        missing=1
+    fi
+
+    if [[ $missing -eq 1 ]]; then
+        echo ""
+        echo "Please install missing dependencies and try again."
+        exit 1
+    fi
+}
+
+# Only check dependencies for interactive commands (not help)
+[[ "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]] && check_dependencies
+
+cleanup() {
+    printf '\033[?25h\033[0m'
+    stty echo 2>/dev/null
+    clear
+    exit 0
+}
+trap cleanup INT TERM EXIT
+
+# Prevent gum from querying terminal colors
+export CLICOLOR_FORCE=1
+export COLORTERM=truecolor
+export TERM=${TERM:-xterm-256color}
+
+# ============================================================
+# Data Path Detection (with edge case handling)
+# ============================================================
+# Priority:
+# 1. VIBAN_DATA_DIR env var (explicit override)
+# 2. Git common dir (shared across worktrees)
+# 3. Project root .viban/ directory (non-git projects)
+
+VIBAN_DATA_DIR="${VIBAN_DATA_DIR:-}"
+VIBAN_IS_GIT_REPO=false
+
+if [[ -z "$VIBAN_DATA_DIR" ]]; then
+    # Try git common dir first (shared across worktrees)
+    if _git_common="$(git rev-parse --git-common-dir 2>/dev/null)"; then
+        VIBAN_IS_GIT_REPO=true
+        if [[ -d "$_git_common" ]]; then
+            VIBAN_DATA_DIR="$(cd "$_git_common" && pwd)"
+        fi
+    fi
+    # Fallback: project root .viban directory
+    if [[ -z "$VIBAN_DATA_DIR" ]]; then
+        VIBAN_DATA_DIR="${PWD}/.viban"
+    fi
+fi
+
+VIBAN_JSON="${VIBAN_DATA_DIR}/viban.json"
+
+# Ensure data directory exists
+mkdir -p "$VIBAN_DATA_DIR"
+
+# ============================================================
+# Initialize viban.json if not exists
+# ============================================================
+init_viban_json() {
+    if [[ ! -f "$VIBAN_JSON" ]]; then
+        cat > "$VIBAN_JSON" << 'EOF'
+{
+  "version": 2,
+  "next_id": 1,
+  "issues": []
+}
+EOF
+        echo "✨ Initialized new viban board at: $VIBAN_JSON"
+    fi
+}
+
+# Auto-initialize for commands that need data (not help/init)
+case "$1" in
+    help|--help|-h|init) ;;
+    *) init_viban_json ;;
+esac
+
+# Colors - Sunset Orange Theme
+typeset -A C
+C=(
+    fg        "#FFE5D9"
+    fg_dim    "#B89685"
+    backlog   "#8B7B6B"
+    progress  "#FF6B35"
+    review    "#C44536"
+    card_bg   "#2D2416"
+    card_bd   "#5A4A3A"
+    selected  "#FF8C42"
+    accent    "#F7931E"
+)
+
+# 3 statuses only
+typeset -A STATUS_LABEL STATUS_COLOR
+STATUS_LABEL=(backlog "To-Do" in_progress "In Progress" review "Human Review")
+STATUS_COLOR=(backlog "${C[backlog]}" in_progress "${C[progress]}" review "${C[review]}")
+
+# Priority levels (P0=Critical, P3=Good to have)
+typeset -A PRIORITY_LABEL PRIORITY_COLOR
+PRIORITY_LABEL=(P0 "CRITICAL" P1 "HIGH" P2 "MEDIUM" P3 "LOW")
+PRIORITY_COLOR=(P0 "\033[38;2;255;69;58m" P1 "\033[38;2;255;159;10m" P2 "\033[38;2;255;214;10m" P3 "\033[38;2;142;142;147m")
+
+# Issue types (displayed as tags alongside priority)
+typeset -A TYPE_LABEL TYPE_COLOR
+TYPE_LABEL=(bug "BUG" feat "FEAT" chore "CHORE" refactor "REFAC")
+TYPE_COLOR=(bug "\033[38;2;255;69;58m" feat "\033[38;2;50;215;75m" chore "\033[38;2;142;142;147m" refactor "\033[38;2;90;200;250m")
+
+VIBAN_STATUSES=(backlog in_progress review)
+
+# Pre-generate horizontal borders (cache) - optimized with printf repeat
+typeset -A BORDER_CACHE
+gen_border() {
+    local w=$1
+    [[ -n "${BORDER_CACHE[$w]}" ]] && { echo "${BORDER_CACHE[$w]}"; return; }
+    # Use printf with dynamic width - single call instead of loop
+    local b=$(printf '─%.0s' {1..$w})
+    BORDER_CACHE[$w]="$b"
+    echo "$b"
+}
+
+# Cached terminal dimensions (with sensible defaults)
+CACHED_TERM_W=100
+CACHED_TERM_H=30
+CACHED_COL_W=32
+CACHED_MAX_H=22
+CACHED_MAX_TASKS=7
+
+# Spinner for in_progress cards (ASCII to avoid width calculation issues)
+SPINNER_FRAMES=('|' '/' '-' '\')
+SPINNER_IDX=0
+
+update_term_cache() {
+    if [[ -n "$COLUMNS" ]]; then
+        CACHED_TERM_W=$COLUMNS
+    elif command -v stty &>/dev/null; then
+        CACHED_TERM_W=$(stty size 2>/dev/null | cut -d' ' -f2)
+    else
+        CACHED_TERM_W=$(tput cols 2>/dev/null || echo 100)
+    fi
+    if [[ -n "$LINES" ]]; then
+        CACHED_TERM_H=$LINES
+    elif command -v stty &>/dev/null; then
+        CACHED_TERM_H=$(stty size 2>/dev/null | cut -d' ' -f1)
+    else
+        CACHED_TERM_H=$(tput lines 2>/dev/null || echo 30)
+    fi
+    CACHED_COL_W=$(( (CACHED_TERM_W - 2) / 3 ))
+    CACHED_MAX_H=$((CACHED_TERM_H - 8))
+    CACHED_MAX_TASKS=$((CACHED_MAX_H / 5))
+    (( CACHED_MAX_TASKS < 2 )) && CACHED_MAX_TASKS=2
+    (( CACHED_MAX_TASKS > 8 )) && CACHED_MAX_TASKS=8
+}
+
+check_deps() {
+    command -v gum &>/dev/null || { echo "Error: gum required"; exit 1; }
+    command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }
+}
+
+init_json() {
+    if [[ ! -f "$VIBAN_JSON" ]]; then
+        local max_wt_id=0
+        if [[ -d "$VIBAN_DATA_DIR/worktrees" ]]; then
+            for d in "$VIBAN_DATA_DIR/worktrees/"*(/N); do
+                local wt_id="${d:t}"
+                [[ "$wt_id" =~ ^[0-9]+$ ]] && (( wt_id > max_wt_id )) && max_wt_id=$wt_id
+            done
+        fi
+        local next_id=$((max_wt_id + 1))
+        echo "{\"version\":2,\"next_id\":$next_id,\"issues\":[]}" > "$VIBAN_JSON"
+    elif [[ $(jq '.version // 1' "$VIBAN_JSON") -lt 2 ]]; then
+        jq '{
+            version: 2,
+            next_id: (([.issues[].id] | max // 0) + 1),
+            issues: .issues
+        }' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+    fi
+}
+
+get_next_id() { jq -r '.next_id // (([.issues[].id] | max // 0) + 1)' "$VIBAN_JSON"; }
+
+# Calculate effective order for sorting (priority-based virtual order for cards without order)
+# Used internally for fractional indexing calculations
+# Cards with order: use actual order
+# Cards without order: P0=1000000, P1=2000000, P2=3000000, P3=4000000 + id
+calc_effective_order() {
+    local order="$1"
+    local priority="${2:-P3}"
+    local id="$3"
+
+    if [[ -n "$order" && "$order" != "null" ]]; then
+        echo "$order"
+    else
+        local base_order
+        case "$priority" in
+            P0) base_order=1000000;;
+            P1) base_order=2000000;;
+            P2) base_order=3000000;;
+            *)  base_order=4000000;;
+        esac
+        echo $((base_order + id))
+    fi
+}
+
+add_issue() {
+    local title=$(gum input --placeholder "Enter task title..." --width 50 \
+        --prompt.foreground "${C[accent]}" --cursor.foreground "${C[selected]}")
+    [[ -z "$title" ]] && return
+
+    # Select type
+    local issue_type=$(gum choose "bug (BUG)" "feat (FEATURE)" "chore (CHORE)" "refactor (REFACTOR)" \
+        --header "Select type:" --cursor.foreground "${C[selected]}")
+    issue_type="${issue_type%% *}"  # Extract bug, feat, chore, or refactor
+    [[ -z "$issue_type" ]] && issue_type="feat"
+
+    # Select priority
+    local priority=$(gum choose "P0 (CRITICAL)" "P1 (HIGH)" "P2 (MEDIUM)" "P3 (LOW)" \
+        --header "Select priority:" --cursor.foreground "${C[selected]}")
+    priority="${priority%% *}"  # Extract P0, P1, P2, or P3
+    [[ -z "$priority" ]] && priority="P3"
+
+    local desc=""
+    if gum confirm "Add description?" --affirmative "Yes (open editor)" --negative "No" \
+        --selected.foreground="#000000" --selected.background "${C[accent]}"; then
+        local tmpfile=$(mktemp)
+        local editor="${EDITOR:-${VISUAL:-vim}}"
+        local next_id=$(get_next_id)
+        local today=$(date +"%Y-%m-%d")
+        cat > "$tmpfile" <<TEMPLATE
+# ─────────────────────────────────────────────
+# VIBAN Issue #$next_id
+# ─────────────────────────────────────────────
+# Title: $title
+# Priority: $priority
+# Created: $today
+# Status: backlog
+# ─────────────────────────────────────────────
+
+# ▼ 아래에 설명을 작성하세요 (이 줄 아래부터 저장됩니다)
+
+TEMPLATE
+        $editor "$tmpfile"
+        desc=$(sed '/^#/d' "$tmpfile" | sed '/./,$!d')
+        rm -f "$tmpfile"
+    fi
+
+    local id=$(get_next_id) now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    # New cards don't have order - they follow priority-based sorting
+    # Order is only assigned when manually moved
+    local tmpjson=$(mktemp)
+    printf '%s' "$desc" > "$tmpjson"
+    jq --arg id "$id" --arg title "$title" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --arg now "$now" '
+        .next_id = ((.next_id // 0) + 1) |
+        .issues += [{
+            id:($id|tonumber),
+            title:$title,
+            description:$desc,
+            status:"backlog",
+            priority:$priority,
+            type:$issue_type,
+            assigned_to:null,
+            created_at:$now,
+            updated_at:$now
+        }]' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+    rm -f "$tmpjson"
+}
+
+# Sort: backlog/in_progress by effective order, review by updated_at desc
+# Effective order: if .order exists -> use it (manually positioned)
+#                  if .order is null -> priority-based virtual order (P0=1M, P1=2M, P2=3M, P3=4M) + id
+# This ensures: manually ordered cards stay fixed, others follow priority order
+get_issues_by_status() {
+    local st="$1"
+    if [[ "$st" == "review" ]]; then
+        jq -r --arg s "$st" '.issues|map(select(.status==$s))|sort_by(.updated_at)|reverse' "$VIBAN_JSON"
+    else
+        jq -r --arg s "$st" '
+            .issues | map(select(.status==$s)) | sort_by(
+                if .order != null then [0, .order]
+                else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id]
+                end
+            )
+        ' "$VIBAN_JSON"
+    fi
+}
+count_issues_by_status() { jq -r --arg s "$1" '[.issues[]|select(.status==$s)]|length' "$VIBAN_JSON"; }
+
+get_term_width() {
+    # Try multiple methods to get terminal width
+    if [[ -n "$COLUMNS" ]]; then
+        echo "$COLUMNS"
+    elif command -v stty &>/dev/null; then
+        stty size 2>/dev/null | cut -d' ' -f2
+    else
+        tput cols 2>/dev/null || echo 100
+    fi
+}
+get_term_height() {
+    if [[ -n "$LINES" ]]; then
+        echo "$LINES"
+    elif command -v stty &>/dev/null; then
+        stty size 2>/dev/null | cut -d' ' -f1
+    else
+        tput lines 2>/dev/null || echo 30
+    fi
+}
+
+# Get display width of string (Korean = 2, ASCII = 1)
+# Fully optimized: no subprocesses, pure zsh with LC_ALL=C trick
+str_width() {
+    local str="$1"
+    local char_count=${#str}
+    # Get byte count in C locale (UTF-8): CJK chars use 3 bytes each
+    local byte_count
+    LC_ALL=C byte_count=${#str}
+    # Each CJK char adds 2 extra bytes (3 total - 1 for normal char = 2 extra)
+    # Display width = ASCII count + (extra bytes / 2 for CJK chars)
+    local multi_byte_chars=$(( (byte_count - char_count) / 2 ))
+    echo $(( char_count + multi_byte_chars ))
+}
+
+# Truncate string to max display width (optimized)
+# Uses str_width for width calculation to ensure correct byte counting
+truncate_str() {
+    local str="$1" max=$2
+    local len=${#str}
+    local w=$(str_width "$str")
+    # If already fits, return as-is
+    (( w <= max )) && { echo "$str"; return; }
+    # Binary search for truncation point
+    local lo=0 hi=$len mid sub_str
+    while (( lo < hi )); do
+        mid=$(( (lo + hi + 1) / 2 ))
+        sub_str="${str:0:$mid}"
+        w=$(str_width "$sub_str")
+        if (( w <= max )); then
+            lo=$mid
+        else
+            hi=$((mid - 1))
+        fi
+    done
+    echo "${str:0:$lo}"
+}
+
+# ANSI color codes - Orange Theme
+A_RESET="\033[0m"
+A_BOLD="\033[1m"
+A_DIM="\033[2m"
+A_FG="\033[38;2;255;229;217m"        # Warm cream text
+A_GRAY="\033[38;2;139;123;107m"      # Warm gray for backlog
+A_ORANGE="\033[38;2;255;107;53m"     # Vibrant orange for in_progress
+A_DEEP_ORANGE="\033[38;2;196;69;54m" # Deep orange for review
+A_ACCENT="\033[38;2;247;147;30m"     # Golden accent
+A_SELECTED="\033[38;2;255;140;66m"   # Bright selection
+
+# Print centered text (uses cached width)
+print_center() {
+    local text=$1 color=${2:-$A_FG}
+    local w=$CACHED_TERM_W
+    (( w == 0 )) && w=$(get_term_width)
+    local len=${#text}
+    local pad=$(( (w - len) / 2 ))
+    printf "%${pad}s${color}%s${A_RESET}\033[K\n" "" "$text"
+}
+
+# Draw header with pure ANSI
+draw_header() {
+    printf '\033[K\n'
+    print_center "VIBAN" "${A_BOLD}${A_ACCENT}"
+    print_center "Vibe Kanban" "${A_DIM}"
+    printf '\033[K\n'
+}
+
+# Get status color code
+get_status_color() {
+    case "$1" in
+        backlog) echo "$A_GRAY";;
+        in_progress) echo "$A_ORANGE";;
+        review) echo "$A_DEEP_ORANGE";;
+    esac
+}
+
+# Build column lines into array (optimized - single jq call, cached borders)
+# $1: status, $2: col_selected, $3: card_selected (-1 if none), $4: max_h, $5: col_w, $6: json_data
+build_column_lines() {
+    local st="$1"
+    local is_col_selected="${2:-0}"
+    local card_sel="${3:--1}"
+    local max_h="${4:-20}"
+    local col_w="${5:-30}"
+    local json_data="$6"
+    local label="${STATUS_LABEL[$st]:-Unknown}"
+    local color=$(get_status_color "$st")
+
+    # Single jq call to get all issues for this status (include description, priority, type)
+    # Replace newlines/tabs in description to prevent parsing issues
+    # Sort: review by updated_at desc, others by effective order (ordered cards first, then priority)
+    local sort_expr='sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)'
+    [[ "$st" == "review" ]] && sort_expr='sort_by(.updated_at) | reverse'
+    local issues_data=$(printf '%s' "$json_data" | jq -r --arg s "$st" "
+        .issues | map(select(.status==\$s)) | $sort_expr |
+        .[] | \"\\(.id)\t\\(.title)\t\\((.description // \"\") | gsub(\"[\\n\\t\\r]\"; \" \"))\t\\(.priority // \"P3\")\t\\(.type // \"\")\"")
+    local count=0
+    # Count lines without subprocess using zsh array splitting
+    [[ -n "$issues_data" ]] && count=${#${(f)issues_data}}
+
+    # Header centered in column
+    local hdr_text="● $label"
+    local hdr_w=$((${#label} + 2))
+    local left_pad=$(( (col_w - hdr_w) / 2 ))
+    local right_pad=$((col_w - hdr_w - left_pad))
+    if (( is_col_selected )); then
+        printf "%${left_pad}s${A_BOLD}${A_SELECTED}%s${A_RESET}%${right_pad}s\n" "" "$hdr_text" ""
+        # Underline for selected column - use printf repeat pattern
+        local underline=$(printf '─%.0s' {1..$hdr_w})
+        printf "%${left_pad}s${A_SELECTED}%s${A_RESET}%${right_pad}s\n" "" "$underline" ""
+    else
+        printf "%${left_pad}s${color}%s${A_RESET}%${right_pad}s\n" "" "$hdr_text" ""
+        # Empty line for non-selected columns
+        printf "%${col_w}s\n" ""
+    fi
+
+    local lines_used=2
+    local card_inner=$((col_w - 4))
+    local border=$(gen_border $card_inner)
+
+    # Task cards (5 lines: top border, title, desc/priority, empty, bottom border)
+    local shown=0
+    while IFS=$'\t' read -r id title desc priority issue_type; do
+        [[ -z "$id" ]] && continue
+        (( shown >= CACHED_MAX_TASKS )) && {
+            local more_text="  +$((count - shown)) more..."
+            local more_w=${#more_text}
+            printf "${A_DIM}%s${A_RESET}%$((col_w - more_w))s\n" "$more_text" ""
+            ((lines_used++))
+            break
+        }
+
+        # Default priority and type if not set
+        [[ -z "$priority" || "$priority" == "null" ]] && priority="P3"
+        [[ -z "$issue_type" || "$issue_type" == "null" ]] && issue_type=""
+
+        # Title line (with spinner for in_progress)
+        local spinner_prefix=""
+        local spinner_w=0
+        if [[ "$st" == "in_progress" ]]; then
+            spinner_prefix="${SPINNER_FRAMES[$((SPINNER_IDX % ${#SPINNER_FRAMES[@]} + 1))]} "
+            spinner_w=2  # char(1) + space(1)
+        fi
+        local title_w=$((card_inner - 7 - spinner_w))
+        local short=$(truncate_str "$title" $title_w)
+        local title_content="  ${spinner_prefix}#$id $short"
+        local title_content_w=$(str_width "$title_content")
+        local title_pad=$((card_inner - title_content_w))
+        (( title_pad < 0 )) && title_pad=0
+
+        # Description line (dimmed, truncated)
+        local desc_w=$((card_inner - 4))
+        local desc_short=""
+        if [[ -n "$desc" && "$desc" != "null" ]]; then
+            desc_short=$(truncate_str "$desc" $desc_w)
+        fi
+        local desc_content="  $desc_short"
+        local desc_content_w=$(str_width "$desc_content")
+        local desc_pad=$((card_inner - desc_content_w))
+        (( desc_pad < 0 )) && desc_pad=0
+
+        # Priority and type tags on same line (e.g., [P0] [BUG])
+        local priority_tag="[$priority]"
+        local priority_color="${PRIORITY_COLOR[$priority]:-$A_DIM}"
+        local type_tag=""
+        local type_color=""
+        local tags_content=""
+        local tags_w=0
+        if [[ -n "$issue_type" ]]; then
+            type_tag="[${TYPE_LABEL[$issue_type]:-$issue_type}]"
+            type_color="${TYPE_COLOR[$issue_type]:-$A_DIM}"
+            # Calculate total width: "  [P1] [BUG]"
+            tags_w=$((${#priority_tag} + 1 + ${#type_tag}))
+        else
+            tags_w=${#priority_tag}
+        fi
+        local tags_pad=$((card_inner - tags_w - 2))  # -2 for leading spaces
+
+        local border_color="$A_DIM"
+        local text_color="$A_FG"
+        local desc_color="$A_DIM"
+        if (( is_col_selected && shown == card_sel )); then
+            border_color="${A_SELECTED}"
+            text_color="${A_BOLD}${A_ACCENT}"
+            desc_color="${A_ACCENT}"
+        fi
+
+        # 5-line card with priority+type tags on 4th line
+        printf " ${border_color}╭%s╮${A_RESET} \n" "$border"
+        printf " ${border_color}│${A_RESET}${text_color}%s${A_RESET}%${title_pad}s${border_color}│${A_RESET} \n" "$title_content" ""
+        printf " ${border_color}│${A_RESET}${desc_color}%s${A_RESET}%${desc_pad}s${border_color}│${A_RESET} \n" "$desc_content" ""
+        if [[ -n "$type_tag" ]]; then
+            printf " ${border_color}│${A_RESET}  ${priority_color}%s${A_RESET} ${type_color}%s${A_RESET}%${tags_pad}s${border_color}│${A_RESET} \n" "$priority_tag" "$type_tag" ""
+        else
+            printf " ${border_color}│${A_RESET}  ${priority_color}%s${A_RESET}%${tags_pad}s${border_color}│${A_RESET} \n" "$priority_tag" ""
+        fi
+        printf " ${border_color}╰%s╯${A_RESET} \n" "$border"
+
+        ((shown++))
+        lines_used=$((lines_used + 5))
+    done <<< "$issues_data"
+
+    if (( count == 0 )); then
+        local no_text="  No tasks"
+        local no_w=${#no_text}
+        printf "${A_DIM}%s${A_RESET}%$((col_w - no_w))s\n" "$no_text" ""
+        ((lines_used++))
+    fi
+
+    while (( lines_used < max_h )); do
+        printf "%${col_w}s\n" ""
+        ((lines_used++))
+    done
+}
+
+# ESC character for ANSI stripping (defined once at script level)
+_ESC=$'\e'
+
+# Pad line to exact width with spaces
+# Optimized: use zsh parameter expansion to strip ANSI codes
+pad_to_width() {
+    local line="$1"
+    local width="$2"
+    # Strip ANSI codes: ESC [ followed by numbers/semicolons, ending with letter
+    local plain="${line//${_ESC}\[[0-9;]#[a-zA-Z]/}"
+    # Calculate display width: char count + (bytes - chars) / 2 for CJK chars
+    local char_count=${#plain} byte_count
+    LC_ALL=C byte_count=${#plain}
+    unset LC_ALL  # Restore default locale to prevent affecting subsequent calls
+    local display_w=$(( char_count + (byte_count - char_count) / 2 ))
+    local pad=$((width - display_w))
+    printf '%s' "$line"
+    (( pad > 0 )) && printf "%${pad}s" ""
+}
+
+# Draw the board (optimized - arrays instead of temp files)
+# $1: col_sel, $2: card_sel, $3: json_data
+draw_board() {
+    local col_sel=${1:-0}
+    local card_sel=${2:--1}
+    local json_data="$3"
+    local col_w=$CACHED_COL_W
+    local max_h=$CACHED_MAX_H
+
+    local c1=-1 c2=-1 c3=-1
+    case $col_sel in
+        0) c1=$card_sel;;
+        1) c2=$card_sel;;
+        2) c3=$card_sel;;
+    esac
+
+    # Build columns to arrays
+    local -a col1 col2 col3
+    col1=("${(@f)$(build_column_lines "backlog" $((col_sel == 0)) $c1 $max_h $col_w "$json_data")}")
+    col2=("${(@f)$(build_column_lines "in_progress" $((col_sel == 1)) $c2 $max_h $col_w "$json_data")}")
+    col3=("${(@f)$(build_column_lines "review" $((col_sel == 2)) $c3 $max_h $col_w "$json_data")}")
+
+    # Merge line by line
+    local i
+    for ((i=1; i<=max_h; i++)); do
+        pad_to_width "${col1[$i]}" $col_w
+        printf "${A_DIM}│${A_RESET}"
+        pad_to_width "${col2[$i]}" $col_w
+        printf "${A_DIM}│${A_RESET}"
+        pad_to_width "${col3[$i]}" $col_w
+        printf '\033[K\n'
+    done
+}
+
+draw_footer() {
+    printf '\033[K\n'
+    print_center "←→ Column  │  ↑↓ Card  │  Shift+↑↓ Reorder  │  Shift+←→ Move  │  Enter Edit  │  ⌫ Del  │  A Add  │  Q Quit" "${A_DIM}"
+}
+
+read_key() {
+    local key result=""
+    # Timeout for spinner animation refresh (0.5s to prevent key drops)
+    read -sk1 -t 0.5 key 2>/dev/null || { echo "timeout"; return; }
+
+    if [[ "$key" == $'\e' ]]; then
+        read -sk1 -t 0.1 c2 2>/dev/null
+        if [[ "$c2" == "[" ]]; then
+            read -sk1 -t 0.1 c3 2>/dev/null
+            case "$c3" in
+                D) result="left";; C) result="right";;
+                A) result="up";; B) result="down";;
+                "1")
+                    # Handle Shift+arrow sequences: ESC[1;2X where X is A/B/C/D
+                    read -sk1 -t 0.1 c4 2>/dev/null
+                    if [[ "$c4" == ";" ]]; then
+                        read -sk1 -t 0.1 c5 2>/dev/null
+                        read -sk1 -t 0.1 c6 2>/dev/null
+                        if [[ "$c5" == "2" ]]; then
+                            case "$c6" in
+                                A) result="shift_up";;
+                                B) result="shift_down";;
+                                C) result="shift_right";;
+                                D) result="shift_left";;
+                            esac
+                        fi
+                    fi
+                    ;;
+            esac
+        elif [[ "$c2" == "]" ]]; then
+            # Drain OSC sequence
+            while read -sk1 -t 0.01 _ 2>/dev/null; do :; done
+        fi
+    elif [[ "$key" == "" || "$key" == $'\n' ]]; then
+        result="enter"
+    elif [[ "$key" == $'\x7f' || "$key" == $'\b' ]]; then
+        result="backspace"
+    else
+        case "$key" in
+            q|Q) result="quit";;
+            a|A) result="add";;
+        esac
+    fi
+
+    echo "$result"
+}
+
+# Move card order up or down within a status column (fractional indexing)
+# $1: status, $2: current card index, $3: direction (-1 for up, 1 for down)
+# When manually moved, the card gets an order value to pin its position
+move_card_order() {
+    local st="$1"
+    local cur_idx="$2"
+    local dir="$3"
+    local new_idx=$((cur_idx + dir))
+
+    # Get issues in current effective order (ordered cards first, then priority-sorted)
+    local issues=$(jq -r --arg s "$st" '
+        .issues | map(select(.status==$s)) | sort_by(
+            if .order != null then [0, .order]
+            else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id]
+            end
+        )
+    ' "$VIBAN_JSON")
+    local cnt=$(printf '%s' "$issues" | jq 'length')
+
+    # Bounds check
+    (( new_idx < 0 || new_idx >= cnt )) && return 1
+
+    # Get ID of the card to move
+    local cur_id=$(printf '%s' "$issues" | jq -r ".[$cur_idx].id")
+
+    # Calculate effective order for a card (use actual order or virtual priority-based order)
+    get_eff_order() {
+        local idx=$1
+        local order=$(printf '%s' "$issues" | jq -r ".[$idx].order // \"null\"")
+        if [[ "$order" != "null" ]]; then
+            echo "$order"
+        else
+            local priority=$(printf '%s' "$issues" | jq -r ".[$idx].priority // \"P3\"")
+            local id=$(printf '%s' "$issues" | jq -r ".[$idx].id")
+            case "$priority" in
+                P0) echo $((1000000 + id));;
+                P1) echo $((2000000 + id));;
+                P2) echo $((3000000 + id));;
+                *)  echo $((4000000 + id));;
+            esac
+        fi
+    }
+
+    # Calculate new order using fractional indexing
+    # Place card between the target position and its neighbor
+    local new_order
+    if (( dir < 0 )); then
+        # Moving up: place between target and the one above it
+        local target_order=$(get_eff_order $new_idx)
+        if (( new_idx == 0 )); then
+            # Moving to top: use target_order - 1
+            new_order=$(echo "$target_order - 1" | bc)
+        else
+            local above_order=$(get_eff_order $(($new_idx - 1)))
+            new_order=$(echo "scale=6; ($above_order + $target_order) / 2" | bc)
+        fi
+    else
+        # Moving down: place between target and the one below it
+        local target_order=$(get_eff_order $new_idx)
+        if (( new_idx == cnt - 1 )); then
+            # Moving to bottom: use target_order + 1
+            new_order=$(echo "$target_order + 1" | bc)
+        else
+            local below_order=$(get_eff_order $(($new_idx + 1)))
+            new_order=$(echo "scale=6; ($target_order + $below_order) / 2" | bc)
+        fi
+    fi
+
+    # Update the card's order (this pins it to the new position)
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    jq --argjson cur_id "$cur_id" --argjson new_order "$new_order" --arg now "$now" '
+        (.issues[] | select(.id==$cur_id)) |= . + {order:$new_order,updated_at:$now}
+    ' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    return 0
+}
+
+# Get issue ID by status and index
+get_issue_id_by_index() {
+    local st=$1 idx=$2
+    jq -r --arg s "$st" --argjson i "$idx" '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty' "$VIBAN_JSON"
+}
+
+# Delete issue by ID (with worktree cleanup)
+delete_issue() {
+    local id=$1
+    local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
+    local branch="viban-$id"
+    if [[ -d "$wt_dir" ]]; then
+        git -C "$repo_root" worktree remove "$wt_dir" --force 2>/dev/null
+        git -C "$repo_root" branch -D "$branch" 2>/dev/null
+    fi
+    jq --argjson id "$id" 'del(.issues[]|select((.id|tonumber)==$id))' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && \
+    mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+}
+
+level1_columns() {
+    local col=0 card=0
+
+    # Hide cursor and disable input echo
+    stty -echo 2>/dev/null
+    printf '\033[?25l\033[2J\033[H'
+
+    # Initial cache update
+    update_term_cache
+
+    while true; do
+        # Cache JSON data once per frame
+        local json_data=$(cat "$VIBAN_JSON")
+
+        printf '\033[H\033[0m'
+        draw_header
+        draw_board $col $card "$json_data"
+        draw_footer
+        printf '\033[J'
+
+        # Advance spinner
+        ((SPINNER_IDX++))
+
+        local st="${VIBAN_STATUSES[$((col + 1))]}"
+        # Use cached json_data for count
+        local cnt=$(printf '%s' "$json_data" | jq -r --arg s "$st" '[.issues[]|select(.status==$s)]|length')
+
+        local key=$(read_key)
+        case "$key" in
+            left)
+                local start_col=$col
+                col=$(( (col - 1 + 3) % 3 ))
+                # Skip empty columns (but stop if we return to start)
+                while (( col != start_col )); do
+                    local next_st="${VIBAN_STATUSES[$((col + 1))]}"
+                    local next_cnt=$(printf '%s' "$json_data" | jq -r --arg s "$next_st" '[.issues[]|select(.status==$s)]|length')
+                    (( next_cnt > 0 )) && break
+                    col=$(( (col - 1 + 3) % 3 ))
+                done
+                card=0
+                ;;
+            right)
+                local start_col=$col
+                col=$(( (col + 1) % 3 ))
+                # Skip empty columns (but stop if we return to start)
+                while (( col != start_col )); do
+                    local next_st="${VIBAN_STATUSES[$((col + 1))]}"
+                    local next_cnt=$(printf '%s' "$json_data" | jq -r --arg s "$next_st" '[.issues[]|select(.status==$s)]|length')
+                    (( next_cnt > 0 )) && break
+                    col=$(( (col + 1) % 3 ))
+                done
+                card=0
+                ;;
+            up)
+                (( cnt > 0 )) && card=$(( (card - 1 + cnt) % cnt ))
+                ;;
+            down)
+                (( cnt > 0 )) && card=$(( (card + 1) % cnt ))
+                ;;
+            shift_up)
+                if (( cnt > 0 && card > 0 )); then
+                    # Get card ID before move
+                    local card_id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
+                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    if move_card_order "$st" $card -1; then
+                        # Find new index by ID after move (order changes sort position)
+                        local new_json=$(cat "$VIBAN_JSON")
+                        card=$(printf '%s' "$new_json" | jq -r --arg s "$st" --argjson id "$card_id" '
+                            .issues | map(select(.status==$s)) | sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end) |
+                            to_entries | map(select(.value.id == $id)) | .[0].key // 0
+                        ')
+                    fi
+                fi
+                ;;
+            shift_down)
+                if (( cnt > 0 && card < cnt - 1 )); then
+                    # Get card ID before move
+                    local card_id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
+                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    if move_card_order "$st" $card 1; then
+                        # Find new index by ID after move (order changes sort position)
+                        local new_json=$(cat "$VIBAN_JSON")
+                        card=$(printf '%s' "$new_json" | jq -r --arg s "$st" --argjson id "$card_id" '
+                            .issues | map(select(.status==$s)) | sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end) |
+                            to_entries | map(select(.value.id == $id)) | .[0].key // 0
+                        ')
+                    fi
+                fi
+                ;;
+            enter)
+                if (( cnt > 0 )); then
+                    local id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
+                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    [[ -n "$id" ]] && {
+                        printf '\033[?25h'
+                        stty echo 2>/dev/null
+                        edit_issue "$id"
+                        stty -echo 2>/dev/null
+                        printf '\033[?25l\033[2J\033[H'
+                    }
+                fi
+                ;;
+            shift_left)
+                if (( cnt > 0 && col > 0 )); then
+                    move_card_status "$st" $card -1 && { col=$((col - 1)); card=0; }
+                fi
+                ;;
+            shift_right)
+                if (( cnt > 0 && col < 2 )); then
+                    move_card_status "$st" $card 1 && { col=$((col + 1)); card=0; }
+                fi
+                ;;
+            add)
+                printf '\033[?25h'
+                stty echo 2>/dev/null
+                add_issue
+                stty -echo 2>/dev/null
+                printf '\033[?25l\033[2J\033[H'
+                ;;
+            backspace)
+                if (( cnt > 0 )); then
+                    local id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
+                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    [[ -n "$id" ]] && {
+                        # Move cursor to footer line and run gum there
+                        printf '\033[?25h'
+                        stty echo 2>/dev/null
+                        # Clear footer line and show confirm
+                        printf '\033[%d;1H\033[K' "$CACHED_TERM_H"
+                        if gum confirm "Delete #$id?" --affirmative "Yes" --negative "No" \
+                            --selected.foreground="#000000" --selected.background "${C[accent]}"; then
+                            delete_issue "$id"
+                            (( card > 0 )) && card=$((card - 1))
+                        fi
+                        stty -echo 2>/dev/null
+                        printf '\033[?25l'
+                        # Redraw footer only (cursor back to footer)
+                        printf '\033[%d;1H\033[K' "$((CACHED_TERM_H - 1))"
+                        draw_footer
+                    }
+                fi
+                ;;
+            quit)
+                printf '\033[?25h\033[0m'
+                stty echo 2>/dev/null
+                clear
+                exit 0
+                ;;
+        esac
+    done
+}
+
+# Edit issue in editor (title + description + priority + type)
+edit_issue() {
+    local id=$1
+    local issue=$(jq --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON")
+    [[ -z "$issue" ]] && return 1
+
+    local title=$(printf '%s' "$issue" | jq -r '.title')
+    local desc=$(printf '%s' "$issue" | jq -r '.description // ""')
+    local ist=$(printf '%s' "$issue" | jq -r '.status')
+    local created=$(printf '%s' "$issue" | jq -r '.created_at')
+    local priority=$(printf '%s' "$issue" | jq -r '.priority // "P3"')
+    local issue_type=$(printf '%s' "$issue" | jq -r '.type // ""')
+
+    local tmpfile=$(mktemp)
+    local editor="${EDITOR:-${VISUAL:-vim}}"
+
+    cat > "$tmpfile" <<TEMPLATE
+# ─────────────────────────────────────────────
+# VIBAN Issue #$id
+# ─────────────────────────────────────────────
+# Status: ${STATUS_LABEL[$ist]}
+# Created: ${created:0:10}
+# ─────────────────────────────────────────────
+
+# ▼ Priority (P0=CRITICAL, P1=HIGH, P2=MEDIUM, P3=LOW)
+$priority
+
+# ▼ Type (bug, feat, chore, refactor) - leave empty for none
+$issue_type
+
+# ▼ Title (한 줄)
+$title
+
+# ▼ Description (여러 줄 가능)
+$desc
+TEMPLATE
+
+    $editor "$tmpfile"
+
+    # Parse: priority -> type -> title -> description
+    local new_priority="" new_type="" new_title="" new_desc="" parse_stage=0
+    while IFS= read -r line; do
+        [[ "$line" =~ ^#.*$ ]] && continue
+        case $parse_stage in
+            0)  # Looking for priority
+                [[ -z "$line" ]] && continue
+                # Validate priority format (P0-P3)
+                if [[ "$line" =~ ^P[0-3]$ ]]; then
+                    new_priority="$line"
+                else
+                    new_priority="P3"  # Default if invalid
+                fi
+                parse_stage=1
+                ;;
+            1)  # Looking for type
+                [[ -z "$line" ]] && continue  # 빈 줄은 무시하고 계속 대기
+                # Validate type format (bug, feat, chore, refactor)
+                if [[ "$line" =~ ^(bug|feat|chore|refactor)$ ]]; then
+                    new_type="$line"
+                fi
+                parse_stage=2  # type이든 아니든 비-빈 줄을 만났으면 stage 2로
+                ;;
+            2)  # Looking for title
+                [[ -z "$line" ]] && continue
+                new_title="$line"
+                parse_stage=3
+                ;;
+            3)  # Collecting description
+                # Skip empty lines right after title
+                if [[ -z "$new_desc" && -z "$line" ]]; then
+                    continue
+                fi
+                new_desc+="$line"$'\n'
+                ;;
+        esac
+    done < "$tmpfile"
+
+    # Trim trailing newlines from description
+    new_desc="${new_desc%$'\n'}"
+
+    rm -f "$tmpfile"
+
+    [[ -z "$new_title" ]] && return 1
+    [[ -z "$new_priority" ]] && new_priority="P3"
+
+    # Update issue
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local tmpjson=$(mktemp)
+    printf '%s' "$new_desc" > "$tmpjson"
+    jq --argjson id "$id" --arg title "$new_title" --rawfile desc "$tmpjson" --arg priority "$new_priority" --arg issue_type "$new_type" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {title:$title,description:$desc,priority:$priority,type:(if $issue_type == "" then null else $issue_type end),updated_at:$now}' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+    rm -f "$tmpjson"
+}
+
+# Move card to adjacent column (change status)
+move_card_status() {
+    local st="$1"
+    local card_idx="$2"
+    local dir="$3"  # -1 for left, 1 for right
+
+    local id=$(jq -r --arg s "$st" --argjson i "$card_idx" \
+        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty' "$VIBAN_JSON")
+    [[ -z "$id" ]] && return 1
+
+    # Find current status index and calculate new status
+    local cur_idx=0
+    for i in {1..3}; do
+        [[ "${VIBAN_STATUSES[$i]}" == "$st" ]] && { cur_idx=$i; break; }
+    done
+
+    local new_idx=$((cur_idx + dir))
+    (( new_idx < 1 || new_idx > 3 )) && return 1
+
+    local new_st="${VIBAN_STATUSES[$new_idx]}"
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    jq --argjson id "$id" --arg new_st "$new_st" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:$new_st,updated_at:$now}' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+}
+
+# CLI commands
+cmd_list() {
+    init_json
+    echo ""
+    for st in $VIBAN_STATUSES; do
+        gum style --foreground "${STATUS_COLOR[$st]}" --bold "● ${STATUS_LABEL[$st]} ($(count_issues_by_status "$st"))"
+        get_issues_by_status "$st" | jq -r '.[]|"  #\(.id) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end) \(.title)"'
+        echo ""
+    done
+}
+
+cmd_priority() {
+    init_json
+    [[ -z "$1" ]] && { echo "Usage: viban priority <id> <P0|P1|P2|P3>"; exit 1; }
+    local id="$1"
+    local new_priority="${2:-}"
+
+    # Validate priority
+    if [[ ! "$new_priority" =~ ^P[0-3]$ ]]; then
+        echo "Error: Priority must be P0, P1, P2, or P3"
+        exit 1
+    fi
+
+    # Check if issue exists
+    local exists=$(jq --argjson id "$id" '[.issues[]|select((.id|tonumber)==$id)]|length' "$VIBAN_JSON")
+    [[ "$exists" == "0" ]] && { echo "Error: Issue #$id not found"; exit 1; }
+
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    jq --argjson id "$id" --arg priority "$new_priority" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {priority:$priority,updated_at:$now}' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    echo "✓ #$id priority → $new_priority"
+}
+
+cmd_add() {
+    init_json
+    [[ -z "$1" ]] && { echo "Usage: viban add \"title\" [\"description\"] [priority] [type]"; exit 1; }
+    local id=$(get_next_id) now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local desc="${2:-}"
+    local priority="${3:-P3}"
+    local issue_type="${4:-}"
+    # Validate priority
+    [[ ! "$priority" =~ ^P[0-3]$ ]] && priority="P3"
+    # Validate type (bug, feat, chore, refactor)
+    [[ -n "$issue_type" && ! "$issue_type" =~ ^(bug|feat|chore|refactor)$ ]] && issue_type=""
+    # New cards don't have order - they follow priority-based sorting
+    # Order is only assigned when manually moved
+    local tmpjson=$(mktemp)
+    printf '%s' "$desc" > "$tmpjson"
+    jq --arg id "$id" --arg title "$1" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --arg now "$now" '
+        .next_id = ((.next_id // 0) + 1) |
+        .issues += [{
+            id:($id|tonumber),
+            title:$title,
+            description:$desc,
+            status:"backlog",
+            priority:$priority,
+            type:(if $issue_type == "" then null else $issue_type end),
+            assigned_to:null,
+            created_at:$now,
+            updated_at:$now
+        }]' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+    rm -f "$tmpjson"
+    local type_info=""
+    [[ -n "$issue_type" ]] && type_info=" [$issue_type]"
+    echo "✓ #$id added ($priority)$type_info"
+}
+
+cmd_assign() {
+    init_json
+    local session="${1:-$(echo $RANDOM | md5 | head -c 8)}"
+    local issue=$(jq -r '.issues|map(select(.status=="backlog"))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|first' "$VIBAN_JSON")
+    [[ "$issue" == "null" || -z "$issue" ]] && { echo "No backlog"; exit 1; }
+    local id=$(printf '%s' "$issue" | jq -r '.id') now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Update status to in_progress (no worktree - use branch workflow)
+    jq --argjson id "$id" --arg s "$session" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"in_progress",assigned_to:$s,updated_at:$now}' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    # Set iTerm2 session name to issue number
+    printf '\033]1;#%s\007' "$id"
+
+    echo "✓ #$id assigned"
+    echo "$id"
+}
+
+cmd_review() {
+    init_json
+    local id="${1:-$(jq -r '.issues|map(select(.status=="in_progress"))|first|.id//empty' "$VIBAN_JSON")}"
+    [[ -z "$id" ]] && { echo "None"; exit 1; }
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    jq --argjson id "$id" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"review",assigned_to:null,updated_at:$now}' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    # Clear iTerm2 session name
+    printf '\033]1;\007'
+
+    echo "✓ #$id → review"
+}
+
+cmd_done() {
+    init_json
+    [[ -z "$1" ]] && { echo "Usage: viban done <id>"; exit 1; }
+    # Cleanup worktree if exists
+    local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    local wt_dir="$VIBAN_DATA_DIR/worktrees/$1"
+    local branch="viban-$1"
+    if [[ -d "$wt_dir" ]]; then
+        git -C "$repo_root" worktree remove "$wt_dir" --force 2>/dev/null
+        git -C "$repo_root" branch -D "$branch" 2>/dev/null
+        echo "✓ worktree removed"
+    fi
+    # Remove task (handle both string and number ID)
+    jq --argjson id "$1" 'del(.issues[]|select((.id|tonumber)==$id))' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && \
+    mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    # Clear iTerm2 session name
+    printf '\033]1;\007'
+
+    echo "✓ #$1 completed & removed"
+}
+
+cmd_get() { init_json; jq --argjson id "$1" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON"; }
+
+cmd_migrate() {
+    init_json
+    echo "Migrating issues..."
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Migration 1: extract [BUG], [FEATURE], [REFACTOR] from title to type field
+    # Also strip [P0-P3] from title if present (already in priority field)
+    echo "  - Extracting type from titles..."
+    jq --arg now "$now" '
+        .issues = [.issues[] |
+            # Extract type from title
+            (if (.title | test("^\\[BUG\\]"; "i")) then "bug"
+             elif (.title | test("^\\[FEATURE\\]"; "i")) then "feat"
+             elif (.title | test("^\\[FEAT\\]"; "i")) then "feat"
+             elif (.title | test("^\\[REFACTOR\\]"; "i")) then "refactor"
+             elif (.title | test("^\\[CHORE\\]"; "i")) then "chore"
+             else .type // null end) as $extracted_type |
+
+            # Clean title: remove [BUG], [FEATURE], [REFACTOR], [CHORE], [P0-P3] prefixes
+            (.title |
+                gsub("^\\[BUG\\]\\s*"; "") |
+                gsub("^\\[FEATURE\\]\\s*"; "") |
+                gsub("^\\[FEAT\\]\\s*"; "") |
+                gsub("^\\[REFACTOR\\]\\s*"; "") |
+                gsub("^\\[CHORE\\]\\s*"; "") |
+                gsub("^\\[P[0-3]\\]\\s*"; "")
+            ) as $clean_title |
+
+            # Update issue
+            . + {
+                title: $clean_title,
+                type: (if $extracted_type then $extracted_type else .type end),
+                updated_at: $now
+            }
+        ]
+    ' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    # Migration 2: Remove order field from all issues
+    # New behavior: order is only set when manually moved, otherwise follows priority
+    echo "  - Removing order field (reset to priority-based sorting)..."
+    jq --arg now "$now" '
+        .issues = [.issues[] | del(.order) | . + {updated_at: $now}]
+    ' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    echo "✓ Migration complete"
+    echo ""
+    echo "Summary:"
+    jq -r '
+        [.issues[] | select(.type != null)] | group_by(.type) |
+        .[] | "  \(.[0].type): \(length) issues"
+    ' "$VIBAN_JSON"
+    echo "  (no type): $(jq '[.issues[] | select(.type == null)] | length' "$VIBAN_JSON") issues"
+    echo ""
+    echo "Issues by priority:"
+    jq -r '
+        [.issues[] | select(.status != "done")] |
+        group_by(.priority // "P3") | sort_by(.[0].priority) |
+        .[] | "  \(.[0].priority // "P3"): \(length) issues"
+    ' "$VIBAN_JSON"
+}
+
+main() {
+    check_deps
+    init_json
+    case "${1:-}" in
+        list)   cmd_list;;
+        add)    cmd_add "$2" "$3" "$4" "$5";;
+        assign) cmd_assign "$2";;
+        review) cmd_review "$2";;
+        done)   cmd_done "$2";;
+        get)    cmd_get "$2";;
+        edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
+        priority) cmd_priority "$2" "$3";;
+        migrate) cmd_migrate;;
+        help|--help|-h)
+            echo "viban - Vibe Kanban"
+            echo ""
+            echo "  viban             TUI"
+            echo "  viban list        Show board"
+            echo "  viban add \"title\" [\"desc\"] [P0-P3] [type]  Add task"
+            echo "  viban priority <id> <P0-P3>   Set priority"
+            echo "  viban assign      Assign first backlog (by priority)"
+            echo "  viban review      → Human Review"
+            echo "  viban done <id>   Complete & remove"
+            echo "  viban edit <id>   Edit task in editor"
+            echo "  viban migrate     Migrate: extract type from title"
+            echo ""
+            echo "  Priority: P0=CRITICAL, P1=HIGH, P2=MEDIUM, P3=LOW"
+            echo "  Type: bug, feat, chore, refactor"
+            ;;
+        "") level1_columns;;
+        *) echo "Unknown: $1"; exit 1;;
+    esac
+}
+
+main "$@"

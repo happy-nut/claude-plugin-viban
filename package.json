@@ -1,0 +1,55 @@
+{
+  "name": "claude-plugin-viban",
+  "version": "1.0.0",
+  "description": "Terminal Kanban TUI for AI-human collaborative issue tracking",
+  "main": "bin/viban",
+  "bin": {
+    "viban": "./bin/viban"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "skills/",
+    "commands/",
+    "docs/",
+    ".claude-plugin/",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "postinstall": "bash scripts/check-deps.sh || true",
+    "test": "bash scripts/check-deps.sh && ./bin/viban help"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/happynut/claude-plugin-viban.git"
+  },
+  "author": {
+    "name": "happynut",
+    "url": "https://github.com/happynut"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/happynut/claude-plugin-viban/issues"
+  },
+  "homepage": "https://github.com/happynut/claude-plugin-viban#readme",
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "kanban",
+    "tui",
+    "issue-tracking",
+    "viban",
+    "terminal",
+    "cli",
+    "ai-tools"
+  ],
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "preferGlobal": true
+}

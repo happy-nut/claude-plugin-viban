@@ -1,0 +1,21 @@
+{
+  "name": "viban",
+  "version": "1.0.0",
+  "description": "Terminal Kanban TUI for AI-human collaborative issue tracking",
+  "author": {
+    "name": "happynut"
+  },
+  "repository": "https://github.com/happynut/claude-plugin-viban",
+  "homepage": "https://github.com/happynut/claude-plugin-viban",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "kanban",
+    "tui",
+    "issue-tracking",
+    "viban"
+  ],
+  "skills": "./skills/",
+  "commands": "./commands/"
+}
