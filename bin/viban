@@ -307,6 +307,32 @@ get_issues_by_status() {
 }
 count_issues_by_status() { jq -r --arg s "$1" '[.issues[]|select(.status==$s)]|length' "$VIBAN_JSON"; }
 
+# Get jq sort expression for status (review uses updated_at, others use order/priority)
+get_sort_expr() {
+    local st="$1"
+    if [[ "$st" == "review" ]]; then
+        echo 'sort_by(.updated_at) | reverse'
+    else
+        echo 'sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)'
+    fi
+}
+
+# Get issue ID by status and card index (uses correct sort order per status)
+get_issue_id_at_index() {
+    local st="$1" idx="$2" json_data="$3"
+    local sort_expr=$(get_sort_expr "$st")
+    printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$idx" \
+        ".issues | map(select(.status==\$s)) | $sort_expr | .[\$i].id // empty"
+}
+
+# Find card index by ID after reorder (uses correct sort order per status)
+get_card_index_by_id() {
+    local st="$1" card_id="$2" json_data="$3"
+    local sort_expr=$(get_sort_expr "$st")
+    printf '%s' "$json_data" | jq -r --arg s "$st" --argjson id "$card_id" \
+        ".issues | map(select(.status==\$s)) | $sort_expr | to_entries | map(select(.value.id == \$id)) | .[0].key // 0"
+}
+
 get_term_width() {
     # Try multiple methods to get terminal width
     if [[ -n "$COLUMNS" ]]; then
@@ -726,10 +752,11 @@ move_card_order() {
     return 0
 }
 
-# Get issue ID by status and index
+# Get issue ID by status and index (uses correct sort order per status)
 get_issue_id_by_index() {
     local st=$1 idx=$2
-    jq -r --arg s "$st" --argjson i "$idx" '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty' "$VIBAN_JSON"
+    local sort_expr=$(get_sort_expr "$st")
+    jq -r --arg s "$st" --argjson i "$idx" ".issues | map(select(.status==\$s)) | $sort_expr | .[\$i].id // empty" "$VIBAN_JSON"
 }
 
 # Delete issue by ID (with worktree cleanup)
@@ -808,38 +835,25 @@ level1_columns() {
                 ;;
             shift_up)
                 if (( cnt > 0 && card > 0 )); then
-                    # Get card ID before move
-                    local card_id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
-                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    local card_id=$(get_issue_id_at_index "$st" "$card" "$json_data")
                     if move_card_order "$st" $card -1; then
-                        # Find new index by ID after move (order changes sort position)
                         local new_json=$(cat "$VIBAN_JSON")
-                        card=$(printf '%s' "$new_json" | jq -r --arg s "$st" --argjson id "$card_id" '
-                            .issues | map(select(.status==$s)) | sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end) |
-                            to_entries | map(select(.value.id == $id)) | .[0].key // 0
-                        ')
+                        card=$(get_card_index_by_id "$st" "$card_id" "$new_json")
                     fi
                 fi
                 ;;
             shift_down)
                 if (( cnt > 0 && card < cnt - 1 )); then
-                    # Get card ID before move
-                    local card_id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
-                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    local card_id=$(get_issue_id_at_index "$st" "$card" "$json_data")
                     if move_card_order "$st" $card 1; then
-                        # Find new index by ID after move (order changes sort position)
                         local new_json=$(cat "$VIBAN_JSON")
-                        card=$(printf '%s' "$new_json" | jq -r --arg s "$st" --argjson id "$card_id" '
-                            .issues | map(select(.status==$s)) | sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end) |
-                            to_entries | map(select(.value.id == $id)) | .[0].key // 0
-                        ')
+                        card=$(get_card_index_by_id "$st" "$card_id" "$new_json")
                     fi
                 fi
                 ;;
             enter)
                 if (( cnt > 0 )); then
-                    local id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
-                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    local id=$(get_issue_id_at_index "$st" "$card" "$json_data")
                     [[ -n "$id" ]] && {
                         printf '\033[?25h'
                         stty echo 2>/dev/null
@@ -868,8 +882,7 @@ level1_columns() {
                 ;;
             backspace)
                 if (( cnt > 0 )); then
-                    local id=$(printf '%s' "$json_data" | jq -r --arg s "$st" --argjson i "$card" \
-                        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty')
+                    local id=$(get_issue_id_at_index "$st" "$card" "$json_data")
                     [[ -n "$id" ]] && {
                         # Move cursor to footer line and run gum there
                         printf '\033[?25h'
@@ -1000,8 +1013,9 @@ move_card_status() {
     local card_idx="$2"
     local dir="$3"  # -1 for left, 1 for right
 
+    local sort_expr=$(get_sort_expr "$st")
     local id=$(jq -r --arg s "$st" --argjson i "$card_idx" \
-        '.issues|map(select(.status==$s))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|.[$i].id // empty' "$VIBAN_JSON")
+        ".issues | map(select(.status==\$s)) | $sort_expr | .[\$i].id // empty" "$VIBAN_JSON")
     [[ -z "$id" ]] && return 1
 
     # Find current status index and calculate new status
