@@ -24,7 +24,17 @@
 
 ## Installation
 
-### Via npm (Recommended)
+### One-liner (Recommended)
+
+Installs all dependencies (zsh, gum, jq) and viban automatically:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/happy-nut/claude-plugin-viban/main/install.sh | bash
+```
+
+### Via npm
+
+If you already have zsh, gum, and jq installed:
 
 ```bash
 npm install -g claude-plugin-viban
@@ -87,7 +97,7 @@ To use viban skills in Claude Code:
 
 # Now you can use:
 /viban:assign
-/viban:todo
+/viban:task
 ```
 
 ## Usage
@@ -162,7 +172,7 @@ Automatically picks the highest priority backlog issue and executes the full res
 - Parallel agent workflows
 - Pre-prioritized backlog processing
 
-#### `/viban:todo` - Create structured issue
+#### `/viban:task` - Create structured issue
 
 Analyzes a problem and creates a properly structured viban issue:
 
@@ -294,7 +304,7 @@ claude-plugin-viban/
 │   └── check-deps.sh        # Dependency checker
 ├── skills/
 │   ├── assign/              # /viban:assign skill
-│   └── todo/                # /viban:todo skill
+│   └── task/                # /viban:task skill
 ├── LICENSE                  # MIT License
 ├── package.json             # NPM package config
 └── README.md                # This file

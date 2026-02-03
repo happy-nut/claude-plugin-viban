@@ -1,5 +1,5 @@
 ---
-name: viban:todo
+name: viban:task
 description: "Analyze problem situation and register as viban issue (focus on symptoms and problem definition)"
 category: development
 complexity: medium
@@ -7,7 +7,7 @@ mcp-servers: []
 personas: []
 ---
 
-# /viban:todo - Problem Analysis and Issue Registration
+# /viban:task - Problem Analysis and Issue Registration
 
 Analyze problem situation and register as viban issue with file locations and evidence.
 
