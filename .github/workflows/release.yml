@@ -24,10 +24,12 @@ jobs:
       - name: Make scripts executable
         run: chmod +x bin/viban scripts/check-deps.sh
 
-      # Trusted Publishing: No NPM_TOKEN needed!
-      # npm authenticates via OIDC with GitHub Actions
+      # First publish: uses NPM_TOKEN
+      # After first publish: switch to Trusted Publishing and remove NPM_TOKEN
       - name: Publish to npm
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
