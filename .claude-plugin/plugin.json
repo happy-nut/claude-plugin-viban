@@ -16,6 +16,5 @@
     "issue-tracking",
     "viban"
   ],
-  "skills": "./skills/",
   "commands": "./commands/"
 }

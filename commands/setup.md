@@ -1,13 +1,9 @@
 ---
-name: viban:setup
-description: "Install viban dependencies (zsh, gum, jq) and verify installation"
-category: setup
-complexity: simple
-mcp-servers: []
-personas: []
+name: setup
+description: "Install viban dependencies (zsh, gum, jq) automatically"
 ---
 
-# /viban:setup - Install Dependencies
+# /setup - Install Dependencies
 
 Automatically install all viban dependencies based on the operating system.
 
@@ -126,8 +122,8 @@ You can now use:
   viban              Open TUI board
   viban add "task"   Add a task
   viban list         List all tasks
-  /viban:assign      Auto-resolve next issue
-  /viban:task        Create structured issue
+  /assign            Auto-resolve next issue
+  /task              Create structured issue
 ```
 
 ## Error Handling
@@ -139,6 +135,6 @@ You can now use:
 
 ## Notes
 
-- This skill requires terminal access to run shell commands
+- This command requires terminal access to run shell commands
 - On Linux, sudo password may be required
 - All commands are idempotent (safe to run multiple times)

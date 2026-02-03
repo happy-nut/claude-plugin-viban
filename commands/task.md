@@ -1,13 +1,9 @@
 ---
-name: viban:task
-description: "Analyze problem situation and register as viban issue (focus on symptoms and problem definition)"
-category: development
-complexity: medium
-mcp-servers: []
-personas: []
+name: task
+description: "Analyze problem and register as viban issue with evidence"
 ---
 
-# /viban:task - Problem Analysis and Issue Registration
+# /task - Problem Analysis and Issue Registration
 
 Analyze problem situation and register as viban issue with file locations and evidence.
 

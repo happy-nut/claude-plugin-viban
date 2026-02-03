@@ -9,10 +9,10 @@
   "files": [
     "bin/",
     "scripts/",
-    "skills/",
     "commands/",
     "docs/",
     ".claude-plugin/",
+    "install.sh",
     "LICENSE",
     "README.md"
   ],

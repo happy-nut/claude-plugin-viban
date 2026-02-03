@@ -14,7 +14,7 @@
 - **TUI Navigation**: Interactive terminal UI with gum
 - **Parallel Sessions**: Multiple Claude Code sessions can work simultaneously
 - **Session Assignment**: Prevents duplicate work across parallel agents
-- **Claude Code Integration**: Built-in skills for automated issue resolution
+- **Claude Code Integration**: Built-in commands for automated issue resolution
 
 ## Requirements
 
@@ -86,7 +86,7 @@ source ~/.zshrc
 
 ### Claude Code Plugin
 
-To use viban skills in Claude Code:
+To use viban commands in Claude Code:
 
 ```bash
 # Add as plugin marketplace
@@ -96,11 +96,11 @@ To use viban skills in Claude Code:
 /plugin install viban
 
 # Install dependencies (first time only)
-/viban:setup
+/setup
 
 # Now you can use:
-/viban:assign
-/viban:task
+/assign
+/task
 ```
 
 ## Usage
@@ -159,9 +159,9 @@ viban get 3
 
 ### Claude Code Integration
 
-viban provides two skills for automated issue management in Claude Code:
+viban provides commands for automated issue management in Claude Code:
 
-#### `/viban:assign` - Auto-resolve next issue
+#### `/assign` - Auto-resolve next issue
 
 Automatically picks the highest priority backlog issue and executes the full resolution workflow:
 
@@ -175,7 +175,7 @@ Automatically picks the highest priority backlog issue and executes the full res
 - Parallel agent workflows
 - Pre-prioritized backlog processing
 
-#### `/viban:task` - Create structured issue
+#### `/task` - Create structured issue
 
 Analyzes a problem and creates a properly structured viban issue:
 
@@ -281,7 +281,7 @@ Issues are stored in `viban.json`:
 
 Multiple Claude Code sessions can work simultaneously:
 
-1. Each session calls `/viban:assign`
+1. Each session calls `/assign`
 2. Session ID is recorded in `assigned_to` field
 3. Other sessions skip already-assigned issues
 4. Completion moves issue to `review` or `done`
@@ -300,15 +300,14 @@ claude-plugin-viban/
 │       └── release.yml      # NPM publishing
 ├── bin/
 │   └── viban                # Main TUI/CLI script
-├── commands/                # Claude Code commands (deprecated)
 ├── docs/
 │   └── CLAUDE.md            # Claude Code integration guide
 ├── scripts/
 │   └── check-deps.sh        # Dependency checker
-├── skills/
-│   ├── assign/              # /viban:assign skill
-│   ├── setup/               # /viban:setup skill
-│   └── task/                # /viban:task skill
+├── commands/
+│   ├── assign.md            # /assign command
+│   ├── setup.md             # /setup command
+│   └── task.md              # /task command
 ├── LICENSE                  # MIT License
 ├── package.json             # NPM package config
 └── README.md                # This file
