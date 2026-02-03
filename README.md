@@ -6,6 +6,8 @@
 [![npm version](https://badge.fury.io/js/claude-plugin-viban.svg)](https://www.npmjs.com/package/claude-plugin-viban)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![viban screenshot](assets/screenshot.png)
+
 ## Why viban?
 
 - **No Worktree Complexity** - Just a single JSON file. No git worktrees, no complex setup.
