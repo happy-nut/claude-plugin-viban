@@ -1,6 +1,6 @@
 {
   "name": "viban",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Terminal Kanban TUI for AI-human collaborative issue tracking",
   "author": {
     "name": "happy-nut"
