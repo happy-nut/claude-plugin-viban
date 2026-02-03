@@ -2,8 +2,8 @@
 
 **Vi**sual Kan**ban** - Terminal-based Kanban board TUI for AI-human collaborative issue tracking.
 
-[![CI](https://github.com/happynut/claude-plugin-viban/actions/workflows/ci.yml/badge.svg)](https://github.com/happynut/claude-plugin-viban/actions/workflows/ci.yml)
-[![npm version](https://badge.fury.io/js/%40happynut%2Fclaude-plugin-viban.svg)](https://www.npmjs.com/package/@happynut/claude-plugin-viban)
+[![CI](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml/badge.svg)](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/%40happy-nut%2Fclaude-plugin-viban.svg)](https://www.npmjs.com/package/@happy-nut/claude-plugin-viban)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
@@ -62,7 +62,7 @@ source ~/.bashrc
 ### Manual Installation
 
 ```bash
-git clone https://github.com/happynut/claude-plugin-viban.git
+git clone https://github.com/happy-nut/claude-plugin-viban.git
 cd claude-plugin-viban
 chmod +x bin/viban scripts/check-deps.sh
 
@@ -80,7 +80,7 @@ To use viban skills in Claude Code:
 
 ```bash
 # Add as plugin marketplace
-/plugin marketplace add https://github.com/happynut/claude-plugin-viban
+/plugin marketplace add https://github.com/happy-nut/claude-plugin-viban
 
 # Install the plugin
 /plugin install viban
@@ -349,13 +349,13 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Author
 
-**happynut**
+**happy-nut**
 
-- GitHub: [@happynut](https://github.com/happynut)
-- Repository: [claude-plugin-viban](https://github.com/happynut/claude-plugin-viban)
+- GitHub: [@happy-nut](https://github.com/happy-nut)
+- Repository: [claude-plugin-viban](https://github.com/happy-nut/claude-plugin-viban)
 
 ## Links
 
-- [npm package](https://www.npmjs.com/package/@happynut/claude-plugin-viban)
-- [Documentation](https://github.com/happynut/claude-plugin-viban/tree/main/docs)
-- [Issues](https://github.com/happynut/claude-plugin-viban/issues)
+- [npm package](https://www.npmjs.com/package/@happy-nut/claude-plugin-viban)
+- [Documentation](https://github.com/happy-nut/claude-plugin-viban/tree/main/docs)
+- [Issues](https://github.com/happy-nut/claude-plugin-viban/issues)

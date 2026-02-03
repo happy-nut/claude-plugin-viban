@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Terminal Kanban TUI for AI-human collaborative issue tracking",
   "author": {
-    "name": "happynut"
+    "name": "happy-nut"
   },
-  "repository": "https://github.com/happynut/claude-plugin-viban",
-  "homepage": "https://github.com/happynut/claude-plugin-viban",
+  "repository": "https://github.com/happy-nut/claude-plugin-viban",
+  "homepage": "https://github.com/happy-nut/claude-plugin-viban",
   "license": "MIT",
   "keywords": [
     "claude-code",

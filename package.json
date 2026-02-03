@@ -22,17 +22,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/happynut/claude-plugin-viban.git"
+    "url": "git+https://github.com/happy-nut/claude-plugin-viban.git"
   },
   "author": {
-    "name": "happynut",
-    "url": "https://github.com/happynut"
+    "name": "happy-nut",
+    "url": "https://github.com/happy-nut"
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/happynut/claude-plugin-viban/issues"
+    "url": "https://github.com/happy-nut/claude-plugin-viban/issues"
   },
-  "homepage": "https://github.com/happynut/claude-plugin-viban#readme",
+  "homepage": "https://github.com/happy-nut/claude-plugin-viban#readme",
   "keywords": [
     "claude-code",
     "plugin",
