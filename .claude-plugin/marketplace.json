@@ -1,12 +1,22 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "viban-marketplace",
+  "version": "1.0.0",
   "description": "viban plugin marketplace",
+  "owner": {
+    "name": "happy-nut",
+    "email": "happy-nut@users.noreply.github.com"
+  },
   "plugins": [
     {
       "name": "viban",
       "description": "Simple, lightweight local Kanban board for AI-human collaborative issue tracking",
-      "repository": "https://github.com/happy-nut/claude-plugin-viban",
-      "version": "1.0.13"
+      "version": "1.0.13",
+      "author": {
+        "name": "happy-nut"
+      },
+      "source": "./",
+      "category": "productivity"
     }
   ]
 }
