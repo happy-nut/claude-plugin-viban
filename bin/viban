@@ -33,10 +33,11 @@ check_dependencies() {
 # Only check dependencies for interactive commands (not help)
 [[ "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]] && check_dependencies
 
+IN_TUI=false
 cleanup() {
     printf '\033[?25h\033[0m'
     stty echo 2>/dev/null
-    clear
+    $IN_TUI && clear
     exit 0
 }
 trap cleanup INT TERM EXIT
@@ -744,6 +745,7 @@ delete_issue() {
 }
 
 level1_columns() {
+    IN_TUI=true
     local col=0 card=0
 
     # Hide cursor and disable input echo
