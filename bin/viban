@@ -258,7 +258,7 @@ add_issue() {
 # Status: backlog
 # ─────────────────────────────────────────────
 
-# ▼ 아래에 설명을 작성하세요 (이 줄 아래부터 저장됩니다)
+# ▼ Write description below (content below this line will be saved)
 
 TEMPLATE
         $editor "$tmpfile"
@@ -942,10 +942,10 @@ $priority
 # ▼ Type (bug, feat, chore, refactor) - leave empty for none
 $issue_type
 
-# ▼ Title (한 줄)
+# ▼ Title (single line)
 $title
 
-# ▼ Description (여러 줄 가능)
+# ▼ Description (multiple lines allowed)
 $desc
 TEMPLATE
 
