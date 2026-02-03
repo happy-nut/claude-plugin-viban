@@ -473,6 +473,8 @@ build_column_lines() {
         local short=$(truncate_str "$title" $title_w)
         local title_content="  ${spinner_prefix}#$id $short"
         local title_content_w=$(str_width "$title_content")
+        # Braille spinner chars are 3 bytes but display width 1, str_width overcounts by 1
+        [[ -n "$spinner_prefix" ]] && title_content_w=$((title_content_w - 1))
         local title_pad=$((card_inner - title_content_w))
         (( title_pad < 0 )) && title_pad=0
 
