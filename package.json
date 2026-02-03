@@ -1,6 +1,6 @@
 {
   "name": "claude-plugin-viban",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Terminal Kanban TUI for AI-human collaborative issue tracking",
   "main": "bin/viban",
   "bin": {
