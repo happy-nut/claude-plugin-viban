@@ -7,11 +7,12 @@ on:
 
 permissions:
   contents: write
-  id-token: write
+  id-token: write  # Required for npm Trusted Publishing (OIDC)
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment: release  # Optional: for additional protection
     steps:
       - uses: actions/checkout@v4
 
@@ -23,10 +24,10 @@ jobs:
       - name: Make scripts executable
         run: chmod +x bin/viban scripts/check-deps.sh
 
+      # Trusted Publishing: No NPM_TOKEN needed!
+      # npm authenticates via OIDC with GitHub Actions
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
