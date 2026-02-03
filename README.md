@@ -3,7 +3,7 @@
 **Vi**sual Kan**ban** - A simple, lightweight local Kanban board for AI-human collaborative issue tracking.
 
 [![CI](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml/badge.svg)](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml)
-[![npm version](https://badge.fury.io/js/%40happy-nut%2Fclaude-plugin-viban.svg)](https://www.npmjs.com/package/@happy-nut/claude-plugin-viban)
+[![npm version](https://badge.fury.io/js/claude-plugin-viban.svg)](https://www.npmjs.com/package/claude-plugin-viban)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Why viban?
@@ -398,6 +398,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Links
 
-- [npm package](https://www.npmjs.com/package/@happy-nut/claude-plugin-viban)
+- [npm package](https://www.npmjs.com/package/claude-plugin-viban)
 - [Documentation](https://github.com/happy-nut/claude-plugin-viban/tree/main/docs)
 - [Issues](https://github.com/happy-nut/claude-plugin-viban/issues)
