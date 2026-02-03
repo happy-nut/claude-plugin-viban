@@ -18,19 +18,19 @@
 The most effective way to use viban is with **multiple terminal sessions**:
 
 ```
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   Session 1     │  │   Session 2     │  │   Session 3     │
-│                 │  │                 │  │                 │
-│  Product QA     │  │  Issue Work     │  │  viban TUI      │
-│  + /task        │  │  + /assign      │  │                 │
-│                 │  │                 │  │  (always open)  │
-│  Find bugs,     │  │  Pick & resolve │  │  Monitor board  │
-│  register issues│  │  issues         │  │  in real-time   │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
+┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│    Session 1      │  │    Session 2      │  │    Session 3      │
+│                   │  │                   │  │                   │
+│  Product QA       │  │  Issue Work       │  │  viban TUI        │
+│  + /viban:task    │  │  + /viban:assign  │  │                   │
+│                   │  │                   │  │  (always open)    │
+│  Find bugs,       │  │  Pick & resolve   │  │  Monitor board    │
+│  register issues  │  │  issues           │  │  in real-time     │
+└───────────────────┘  └───────────────────┘  └───────────────────┘
 ```
 
-- **Session 1**: QA your product, find issues, run `/task` to register them
-- **Session 2**: Run `/assign` to pick the next issue and resolve it
+- **Session 1**: QA your product, find issues, run `/viban:task` to register them
+- **Session 2**: Run `/viban:assign` to pick the next issue and resolve it
 - **Session 3**: Keep `viban` TUI open to monitor the board
 
 This separation keeps your workflow clean and prevents context switching.
@@ -125,11 +125,11 @@ To use viban commands in Claude Code:
 /plugin install viban
 
 # Install dependencies (first time only)
-/setup
+/viban:setup
 
 # Now you can use:
-/assign
-/task
+/viban:assign
+/viban:task
 ```
 
 ## Usage
@@ -190,7 +190,7 @@ viban get 3
 
 viban provides commands for automated issue management in Claude Code:
 
-#### `/assign` - Auto-resolve next issue
+#### `/viban:assign` - Auto-resolve next issue
 
 Automatically picks the highest priority backlog issue and executes the full resolution workflow:
 
@@ -204,7 +204,7 @@ Automatically picks the highest priority backlog issue and executes the full res
 - Parallel agent workflows
 - Pre-prioritized backlog processing
 
-#### `/task` - Create structured issue
+#### `/viban:task` - Create structured issue
 
 Analyzes a problem and creates a properly structured viban issue:
 
@@ -310,7 +310,7 @@ Issues are stored in `viban.json`:
 
 Multiple Claude Code sessions can work simultaneously:
 
-1. Each session calls `/assign`
+1. Each session calls `/viban:assign`
 2. Session ID is recorded in `assigned_to` field
 3. Other sessions skip already-assigned issues
 4. Completion moves issue to `review` or `done`
@@ -333,10 +333,10 @@ claude-plugin-viban/
 │   └── CLAUDE.md            # Claude Code integration guide
 ├── scripts/
 │   └── check-deps.sh        # Dependency checker
-├── commands/
-│   ├── assign.md            # /assign command
-│   ├── setup.md             # /setup command
-│   └── task.md              # /task command
+├── skills/
+│   ├── assign/SKILL.md      # /viban:assign skill
+│   ├── setup/SKILL.md       # /viban:setup skill
+│   └── task/SKILL.md        # /viban:task skill
 ├── LICENSE                  # MIT License
 ├── package.json             # NPM package config
 └── README.md                # This file
