@@ -147,8 +147,8 @@ CACHED_COL_W=32
 CACHED_MAX_H=22
 CACHED_MAX_TASKS=7
 
-# Spinner for in_progress cards (ASCII to avoid width calculation issues)
-SPINNER_FRAMES=('|' '/' '-' '\')
+# Spinner for in_progress cards (Braille dots - consistent 1-char width)
+SPINNER_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 SPINNER_IDX=0
 
 update_term_cache() {
