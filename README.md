@@ -18,15 +18,15 @@
 The most effective way to use viban is with **multiple terminal sessions**:
 
 ```
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   Session 1     │  │   Session 2     │  │   Session 3     │
-│                 │  │                 │  │                 │
-│  Product QA     │  │  Issue Work     │  │  viban TUI      │
-│ + /viban:task  │  │ + /viban:assign │  │                 │
-│                 │  │                 │  │  (always open)  │
-│  Find bugs,     │  │  Pick & resolve │  │  Monitor board  │
-│  register issues│  │  issues         │  │  in real-time   │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
+┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
+│    Session 1      │  │    Session 2      │  │    Session 3      │
+│                   │  │                   │  │                   │
+│  Product QA       │  │  Issue Work       │  │  viban TUI        │
+│  + /viban:task    │  │  + /viban:assign  │  │                   │
+│                   │  │                   │  │  (always open)    │
+│  Find bugs,       │  │  Pick & resolve   │  │  Monitor board    │
+│  register issues  │  │  issues           │  │  in real-time     │
+└───────────────────┘  └───────────────────┘  └───────────────────┘
 ```
 
 - **Session 1**: QA your product, find issues, run `/viban:task` to register them
