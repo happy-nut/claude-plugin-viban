@@ -95,6 +95,9 @@ To use viban skills in Claude Code:
 # Install the plugin
 /plugin install viban
 
+# Install dependencies (first time only)
+/viban:setup
+
 # Now you can use:
 /viban:assign
 /viban:task
@@ -304,6 +307,7 @@ claude-plugin-viban/
 │   └── check-deps.sh        # Dependency checker
 ├── skills/
 │   ├── assign/              # /viban:assign skill
+│   ├── setup/               # /viban:setup skill
 │   └── task/                # /viban:task skill
 ├── LICENSE                  # MIT License
 ├── package.json             # NPM package config
