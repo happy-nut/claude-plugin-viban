@@ -95,7 +95,7 @@ Error log or stack trace
 ### Step 4: Register viban Issue
 
 ```bash
-viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type}
+viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type} [attachments...]
 ```
 
 **Parameters**:
@@ -103,6 +103,7 @@ viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type}
 - `description`: Issue body (Markdown)
 - `priority`: P0, P1, P2, P3 (default: P3)
 - `type`: bug, feat, chore, refactor
+- `attachments`: (optional) File paths to attach (screenshots, logs, etc.)
 
 **Examples**:
 ```bash
@@ -114,7 +115,41 @@ viban add "Dark mode support" "$'## Symptoms\n...'" P2 feat
 
 # REFACTOR issue
 viban add "Separate auth logic" "$'## Symptoms\n...'" P3 refactor
+
+# With screenshot attachments
+viban add "Layout broken on mobile" "$'## Symptoms\n...'" P1 bug ./screenshots/mobile-bug.png
+
+# With multiple attachments
+viban add "Chart rendering issue" "$'## Symptoms\n...'" P1 bug ./error.png ./console-log.txt
 ```
+
+### Step 4a: Attaching Screenshots (Recommended for Visual Issues)
+
+For visual bugs (layout issues, UI glitches, rendering problems), attaching screenshots significantly helps:
+
+1. **Take a screenshot** of the problem:
+   - macOS: `Cmd + Shift + 4` (selection) or `Cmd + Shift + 3` (full screen)
+   - Save to project directory: `./screenshots/` or `./.viban/attachments/`
+
+2. **Attach during creation**:
+   ```bash
+   viban add "Button misaligned on dashboard" "$'## Symptoms\n...'" P1 bug ./screenshots/button-issue.png
+   ```
+
+3. **Or attach to existing issue**:
+   ```bash
+   viban attach {issue_id} ./screenshots/screenshot1.png ./screenshots/screenshot2.png
+   ```
+
+4. **View attachments**:
+   ```bash
+   viban get {issue_id}
+   ```
+
+> **Why attach screenshots?**
+> - Claude Code can read image files and understand visual context
+> - The assignee can see exactly what the problem looks like
+> - Reduces back-and-forth clarification
 
 ### Step 5: Report Results
 

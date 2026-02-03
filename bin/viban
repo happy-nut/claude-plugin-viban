@@ -1072,20 +1072,27 @@ cmd_priority() {
 
 cmd_add() {
     init_json
-    [[ -z "$1" ]] && { echo "Usage: viban add \"title\" [\"description\"] [priority] [type]"; exit 1; }
+    [[ -z "$1" ]] && { echo "Usage: viban add \"title\" [\"description\"] [priority] [type] [attachments...]"; exit 1; }
     local id=$(get_next_id) now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local desc="${2:-}"
     local priority="${3:-P3}"
     local issue_type="${4:-}"
+    shift 4 2>/dev/null || shift $#
+    local attachments=("$@")
     # Validate priority
     [[ ! "$priority" =~ ^P[0-3]$ ]] && priority="P3"
     # Validate type (bug, feat, chore, refactor)
     [[ -n "$issue_type" && ! "$issue_type" =~ ^(bug|feat|chore|refactor)$ ]] && issue_type=""
+    # Build attachments JSON array
+    local attachments_json="[]"
+    if [[ ${#attachments[@]} -gt 0 ]]; then
+        attachments_json=$(printf '%s\n' "${attachments[@]}" | jq -R . | jq -s .)
+    fi
     # New cards don't have order - they follow priority-based sorting
     # Order is only assigned when manually moved
     local tmpjson=$(mktemp)
     printf '%s' "$desc" > "$tmpjson"
-    jq --arg id "$id" --arg title "$1" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --arg now "$now" '
+    jq --arg id "$id" --arg title "$1" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --argjson attachments "$attachments_json" --arg now "$now" '
         .next_id = ((.next_id // 0) + 1) |
         .issues += [{
             id:($id|tonumber),
@@ -1094,6 +1101,7 @@ cmd_add() {
             status:"backlog",
             priority:$priority,
             type:(if $issue_type == "" then null else $issue_type end),
+            attachments:$attachments,
             assigned_to:null,
             created_at:$now,
             updated_at:$now
@@ -1101,7 +1109,9 @@ cmd_add() {
     rm -f "$tmpjson"
     local type_info=""
     [[ -n "$issue_type" ]] && type_info=" [$issue_type]"
-    echo "✓ #$id added ($priority)$type_info"
+    local attach_info=""
+    [[ ${#attachments[@]} -gt 0 ]] && attach_info=" +${#attachments[@]} files"
+    echo "✓ #$id added ($priority)$type_info$attach_info"
 }
 
 cmd_assign() {
@@ -1161,6 +1171,32 @@ cmd_done() {
 }
 
 cmd_get() { init_json; jq --argjson id "$1" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON"; }
+
+cmd_attach() {
+    init_json
+    [[ -z "$1" || -z "$2" ]] && { echo "Usage: viban attach <id> <file1> [file2...]"; exit 1; }
+    local id="$1"
+    shift
+    local files=("$@")
+
+    # Check if issue exists
+    local exists=$(jq --argjson id "$id" '[.issues[]|select((.id|tonumber)==$id)]|length' "$VIBAN_JSON")
+    [[ "$exists" == "0" ]] && { echo "Error: Issue #$id not found"; exit 1; }
+
+    # Build new attachments array
+    local new_attachments=$(printf '%s\n' "${files[@]}" | jq -R . | jq -s .)
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+    # Merge with existing attachments
+    jq --argjson id "$id" --argjson new "$new_attachments" --arg now "$now" '
+        (.issues[] | select((.id|tonumber)==$id)) |= . + {
+            attachments: ((.attachments // []) + $new | unique),
+            updated_at: $now
+        }
+    ' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    echo "✓ #$id: ${#files[@]} file(s) attached"
+}
 
 cmd_migrate() {
     init_json
@@ -1228,7 +1264,8 @@ main() {
     init_json
     case "${1:-}" in
         list)   cmd_list;;
-        add)    cmd_add "$2" "$3" "$4" "$5";;
+        add)    shift; cmd_add "$@";;
+        attach) shift; cmd_attach "$@";;
         assign) cmd_assign "$2";;
         review) cmd_review "$2";;
         done)   cmd_done "$2";;
@@ -1241,12 +1278,14 @@ main() {
             echo ""
             echo "  viban             TUI"
             echo "  viban list        Show board"
-            echo "  viban add \"title\" [\"desc\"] [P0-P3] [type]  Add task"
+            echo "  viban add \"title\" [\"desc\"] [P0-P3] [type] [files...]  Add task"
+            echo "  viban attach <id> <file1> [file2...]  Attach files to task"
             echo "  viban priority <id> <P0-P3>   Set priority"
             echo "  viban assign      Assign first backlog (by priority)"
             echo "  viban review      → Human Review"
             echo "  viban done <id>   Complete & remove"
             echo "  viban edit <id>   Edit task in editor"
+            echo "  viban get <id>    Get task details (JSON)"
             echo "  viban migrate     Migrate: extract type from title"
             echo ""
             echo "  Priority: P0=CRITICAL, P1=HIGH, P2=MEDIUM, P3=LOW"
