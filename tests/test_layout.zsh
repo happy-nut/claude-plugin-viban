@@ -27,14 +27,23 @@ run_test() {
     ((TESTS_RUN++))
 }
 
-# Source str_width function from viban
+# Source str_width function from viban (Python-based accurate width)
 str_width() {
     local str="$1"
     local char_count=${#str}
     local byte_count
     LC_ALL=C byte_count=${#str}
-    local multi_byte_chars=$(( (byte_count - char_count) / 2 ))
-    echo $(( char_count + multi_byte_chars ))
+
+    # If all ASCII, simple calculation (fast path)
+    [[ $byte_count -eq $char_count ]] && { echo $char_count; return; }
+
+    # Use Python for accurate Unicode width calculation
+    # Note: <<< adds trailing newline, so we strip it with rstrip()
+    python3 -c "
+import unicodedata, sys
+s = sys.stdin.read().rstrip('\n')
+print(sum(2 if unicodedata.east_asian_width(c) in 'FW' else 1 for c in s))
+" <<< "$str"
 }
 
 # Braille spinner frames (same as in viban)
@@ -88,52 +97,57 @@ else
 fi
 
 # ============================================================
-# Test 3: Braille characters (the bug we fixed)
+# Test 3: Braille and Box Drawing characters (narrow 3-byte UTF-8)
 # ============================================================
 echo ""
-echo "Test 3: Braille spinner characters"
+echo "Test 3: Braille and Box Drawing characters"
 
-# Note: str_width calculates Braille as width 2 (3 bytes like CJK)
-# but actual display width is 1. The fix compensates for this
-# in the card layout code, not in str_width itself.
+# Note: str_width now correctly uses Python's unicodedata.east_asian_width()
+# Braille (U+2800-U+28FF) and Box Drawing (U+2500-U+257F) are Neutral = width 1
 
 run_test
 braille_char="${SPINNER_FRAMES[1]}"  # ⠋
 braille_width=$(str_width "$braille_char")
-# str_width returns 2 for Braille (same as CJK due to 3-byte UTF-8)
-# This is "incorrect" for display but we compensate in layout code
-if [[ "$braille_width" == "2" ]]; then
-    pass "Braille '⠋' returns width 2 from str_width (compensated in layout)"
+# Braille characters are Neutral width = 1 (not Wide like CJK)
+if [[ "$braille_width" == "1" ]]; then
+    pass "Braille '⠋' has correct width 1"
 else
-    fail "Braille str_width" "2" "$braille_width"
+    fail "Braille str_width" "1" "$braille_width"
 fi
 
 run_test
-# Spinner with space: "⠋ " should be width 3 from str_width
+# Spinner with space: "⠋ " should be width 2
 spinner_with_space="${braille_char} "
 spinner_width=$(str_width "$spinner_with_space")
-if [[ "$spinner_width" == "3" ]]; then
-    pass "Spinner with space '⠋ ' returns width 3 from str_width"
+if [[ "$spinner_width" == "2" ]]; then
+    pass "Spinner with space '⠋ ' has width 2"
 else
-    fail "Spinner with space str_width" "3" "$spinner_width"
+    fail "Spinner with space str_width" "2" "$spinner_width"
+fi
+
+run_test
+# Box drawing characters should also be width 1 each
+box_drawing="─────"  # 5 box drawing chars
+box_width=$(str_width "$box_drawing")
+if [[ "$box_width" == "5" ]]; then
+    pass "Box drawing '─────' (5 chars) has width 5"
+else
+    fail "Box drawing str_width" "5" "$box_width"
 fi
 
 # ============================================================
-# Test 4: Layout compensation for Braille
+# Test 4: Layout width calculation (no compensation needed)
 # ============================================================
 echo ""
-echo "Test 4: Braille width compensation in layout"
+echo "Test 4: Layout width calculation"
 
-# Simulate the layout calculation with compensation
-# This mirrors the fix in build_column_lines
+# Simulate the layout calculation
+# str_width now correctly calculates all character widths
 simulate_title_width() {
     local spinner_prefix="$1"
     local title="$2"
     local title_content="  ${spinner_prefix}#1 $title"
-    local title_content_w=$(str_width "$title_content")
-    # Braille compensation (the fix we made)
-    [[ -n "$spinner_prefix" ]] && title_content_w=$((title_content_w - 1))
-    echo "$title_content_w"
+    str_width "$title_content"
 }
 
 run_test
@@ -151,12 +165,10 @@ run_test
 # With spinner (Braille + space)
 spinner_prefix="⠧ "
 width_with_spinner=$(simulate_title_width "$spinner_prefix" "Test")
-# "  ⠧ #1 Test" = 2 + (2+1) + 2 + 1 + 4 = 12 from str_width
-# After compensation (-1): 11
-# Actual display: 2 + (1+1) + 2 + 1 + 4 = 11 ✓
+# "  ⠧ #1 Test" = 2 + (1+1) + 2 + 1 + 4 = 11 (spinner is now correctly width 1)
 expected_with_spinner=11
 if [[ "$width_with_spinner" == "$expected_with_spinner" ]]; then
-    pass "Title with spinner: width=$width_with_spinner (compensated)"
+    pass "Title with spinner: width=$width_with_spinner"
 else
     fail "Title with spinner width" "$expected_with_spinner" "$width_with_spinner"
 fi
@@ -182,7 +194,6 @@ test_padding() {
 
     local title_content="  ${spinner_prefix}#1 $short"
     local title_content_w=$(str_width "$title_content")
-    [[ -n "$spinner_prefix" ]] && title_content_w=$((title_content_w - 1))
 
     local title_pad=$((card_inner - title_content_w))
     (( title_pad < 0 )) && title_pad=0

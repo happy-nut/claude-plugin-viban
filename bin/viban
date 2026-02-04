@@ -356,18 +356,24 @@ get_term_height() {
     fi
 }
 
-# Get display width of string (Korean = 2, ASCII = 1)
-# Fully optimized: no subprocesses, pure zsh with LC_ALL=C trick
+# Get display width of string using Unicode East Asian Width property
+# F(Fullwidth) and W(Wide) = 2 columns, others = 1 column
 str_width() {
     local str="$1"
     local char_count=${#str}
-    # Get byte count in C locale (UTF-8): CJK chars use 3 bytes each
     local byte_count
     LC_ALL=C byte_count=${#str}
-    # Each CJK char adds 2 extra bytes (3 total - 1 for normal char = 2 extra)
-    # Display width = ASCII count + (extra bytes / 2 for CJK chars)
-    local multi_byte_chars=$(( (byte_count - char_count) / 2 ))
-    echo $(( char_count + multi_byte_chars ))
+
+    # If all ASCII, simple calculation (fast path)
+    [[ $byte_count -eq $char_count ]] && { echo $char_count; return; }
+
+    # Use Python for accurate Unicode width calculation
+    # Note: <<< adds trailing newline, so we strip it with rstrip()
+    python3 -c "
+import unicodedata, sys
+s = sys.stdin.read().rstrip('\n')
+print(sum(2 if unicodedata.east_asian_width(c) in 'FW' else 1 for c in s))
+" <<< "$str"
 }
 
 # Truncate string to max display width (optimized)
@@ -502,8 +508,6 @@ build_column_lines() {
         local short=$(truncate_str "$title" $title_w)
         local title_content="  ${spinner_prefix}#$id $short"
         local title_content_w=$(str_width "$title_content")
-        # Braille spinner chars are 3 bytes but display width 1, str_width overcounts by 1
-        [[ -n "$spinner_prefix" ]] && title_content_w=$((title_content_w - 1))
         local title_pad=$((card_inner - title_content_w))
         (( title_pad < 0 )) && title_pad=0
 
@@ -970,12 +974,12 @@ TEMPLATE
                 parse_stage=1
                 ;;
             1)  # Looking for type
-                [[ -z "$line" ]] && continue  # 빈 줄은 무시하고 계속 대기
+                [[ -z "$line" ]] && continue  # Skip empty lines
                 # Validate type format (bug, feat, chore, refactor)
                 if [[ "$line" =~ ^(bug|feat|chore|refactor)$ ]]; then
                     new_type="$line"
                 fi
-                parse_stage=2  # type이든 아니든 비-빈 줄을 만났으면 stage 2로
+                parse_stage=2  # Move to stage 2 on any non-empty line
                 ;;
             2)  # Looking for title
                 [[ -z "$line" ]] && continue

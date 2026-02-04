@@ -56,6 +56,34 @@ gh pr create --title "..." --body "..."
 
 ## Shell Script Rules
 
+### Language Policy (Critical)
+
+**All user-facing text in the TUI must be in English**
+
+This includes:
+- Editor templates (title, description, priority, type prompts)
+- Status messages
+- Error messages
+- Help text
+- Comments in code
+
+```bash
+# BAD: Korean in editor template
+cat << EOF
+우선순위: P0/P1/P2/P3
+EOF
+
+# GOOD: English in editor template
+cat << EOF
+Priority: P0/P1/P2/P3
+EOF
+```
+
+**Rationale:**
+- Consistent language throughout the interface
+- Easier maintenance and testing
+- Accessible to international users
+
 ### JSON Handling (Critical)
 
 **Use `printf '%s'` when piping shell variables to jq**
