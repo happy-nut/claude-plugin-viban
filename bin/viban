@@ -98,7 +98,7 @@ EOF
 
 # Auto-initialize for commands that need data (not help/init)
 case "$1" in
-    help|--help|-h|--version|-v|init) ;;
+    help|--help|-h|--version|-v|update|init) ;;
     *) init_viban_json ;;
 esac
 
@@ -1288,6 +1288,15 @@ main() {
                 echo "unknown"
             fi
             ;;
+        update)
+            # Silent update check - only updates if newer version available
+            local current latest
+            current=$(grep '"version"' "$VIBAN_SCRIPT_DIR/package.json" 2>/dev/null | sed 's/.*: *"\([^"]*\)".*/\1/')
+            latest=$(npm show claude-plugin-viban version 2>/dev/null)
+            [[ -z "$current" || -z "$latest" || "$current" == "$latest" ]] && exit 0
+            echo "📦 Updating viban: $current → $latest"
+            npm update -g claude-plugin-viban && echo "✓ Updated to $latest"
+            ;;
         help|--help|-h)
             echo "viban - Vibe Kanban"
             echo ""
@@ -1302,6 +1311,7 @@ main() {
             echo "  viban edit <id>   Edit task in editor"
             echo "  viban get <id>    Get task details (JSON)"
             echo "  viban migrate     Migrate: extract type from title"
+            echo "  viban update      Update to latest version (if available)"
             echo ""
             echo "  Priority: P0=CRITICAL, P1=HIGH, P2=MEDIUM, P3=LOW"
             echo "  Type: bug, feat, chore, refactor"
