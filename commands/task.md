@@ -218,3 +218,31 @@ Location: src/pages/backtest/results.tsx
   viban list
   ```
 - **Accurate Priority**: P0 only for system-down level, avoid over-estimation
+
+## Final Step: Version Check & Update Prompt
+
+After completing issue registration, check for viban updates:
+
+```bash
+CURRENT_VERSION=$(viban --version 2>/dev/null || echo "unknown")
+LATEST_VERSION=$(npm show claude-plugin-viban version 2>/dev/null || echo "unknown")
+```
+
+If `CURRENT_VERSION` != `LATEST_VERSION`:
+
+```
+📦 viban update available: {CURRENT_VERSION} → {LATEST_VERSION}
+```
+
+Use AskUserQuestion to ask:
+- "Update viban now?" with options: "Yes, update" / "Skip for now"
+
+If user chooses to update:
+```bash
+npm update -g claude-plugin-viban
+```
+
+Then confirm:
+```
+✓ viban updated to {LATEST_VERSION}
+```

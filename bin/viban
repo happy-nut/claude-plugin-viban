@@ -3,6 +3,9 @@
 # Requires: gum (brew install gum), jq
 setopt EXTENDED_GLOB
 
+# Store script directory at startup (before any function changes $0)
+VIBAN_SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
 # ============================================================
 # Dependency Check (Early exit with helpful messages)
 # ============================================================
@@ -95,7 +98,7 @@ EOF
 
 # Auto-initialize for commands that need data (not help/init)
 case "$1" in
-    help|--help|-h|init) ;;
+    help|--help|-h|--version|-v|init) ;;
     *) init_viban_json ;;
 esac
 
@@ -1273,6 +1276,14 @@ main() {
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
         migrate) cmd_migrate;;
+        --version|-v)
+            # Get version from package.json
+            if [[ -f "$VIBAN_SCRIPT_DIR/package.json" ]]; then
+                grep '"version"' "$VIBAN_SCRIPT_DIR/package.json" | sed 's/.*: *"\([^"]*\)".*/\1/'
+            else
+                echo "unknown"
+            fi
+            ;;
         help|--help|-h)
             echo "viban - Vibe Kanban"
             echo ""
