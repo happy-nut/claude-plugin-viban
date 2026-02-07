@@ -22,7 +22,7 @@ declare -a CHORES=()
 declare -a OTHERS=()
 
 # Parse commits
-while IFS= read -r line; do
+while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$line" ]] && continue
 
   # Extract commit message (remove hash prefix if present)
