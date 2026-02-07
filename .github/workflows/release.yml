@@ -27,7 +27,14 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          chmod +x scripts/generate-release-notes.sh
+          ./scripts/generate-release-notes.sh > release-notes.md
+          cat release-notes.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          generate_release_notes: true
+          body_path: release-notes.md
