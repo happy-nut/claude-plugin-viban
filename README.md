@@ -50,89 +50,44 @@ This separation keeps your workflow clean and prevents context switching.
 ## Requirements
 
 - zsh
-- [gum](https://github.com/charmbracelet/gum) - `brew install gum`
-- [jq](https://jqlang.github.io/jq/) - `brew install jq`
+- [gum](https://github.com/charmbracelet/gum)
+- [jq](https://jqlang.github.io/jq/)
+
+> **Tip:** If using Claude Code, run `/viban:setup` to install all dependencies automatically.
 
 ## Installation
 
-### One-liner (Recommended)
+### For Claude Code Users
 
-Installs all dependencies (zsh, gum, jq) and viban automatically:
+```bash
+/plugin marketplace add https://github.com/happy-nut/claude-plugin-viban
+/plugin install viban
+/viban:setup   # Installs all dependencies automatically
+```
+
+### For Terminal Users
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/happy-nut/claude-plugin-viban/main/install.sh | bash
 ```
 
-### Via npm
-
-If you already have zsh, gum, and jq installed:
-
+Or via npm (requires zsh, gum, jq pre-installed):
 ```bash
 npm install -g claude-plugin-viban
 ```
 
-After installation, `viban` command is automatically available in your terminal.
+<details>
+<summary>Troubleshooting: viban command not found</summary>
 
-**Verify installation:**
+Add npm global bin to your PATH:
 ```bash
-viban help
+# For zsh
+echo 'export PATH="$PATH:$(npm config get prefix)/bin"' >> ~/.zshrc && source ~/.zshrc
+
+# For bash
+echo 'export PATH="$PATH:$(npm config get prefix)/bin"' >> ~/.bashrc && source ~/.bashrc
 ```
-
-### Shell Setup (if viban command not found)
-
-If `viban` is not found after npm install, add npm global bin to your PATH:
-
-**For zsh (macOS default):**
-```bash
-# Add to ~/.zshrc
-export PATH="$PATH:$(npm config get prefix)/bin"
-
-# Reload
-source ~/.zshrc
-```
-
-**For bash:**
-```bash
-# Add to ~/.bashrc
-export PATH="$PATH:$(npm config get prefix)/bin"
-
-# Reload
-source ~/.bashrc
-```
-
-### Manual Installation
-
-```bash
-git clone https://github.com/happy-nut/claude-plugin-viban.git
-cd claude-plugin-viban
-chmod +x bin/viban scripts/check-deps.sh
-
-# Option 1: Symlink to /usr/local/bin
-ln -s "$(pwd)/bin/viban" /usr/local/bin/viban
-
-# Option 2: Add to PATH
-echo 'export PATH="$PATH:'$(pwd)'/bin"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-### Claude Code Plugin
-
-To use viban commands in Claude Code:
-
-```bash
-# Add as plugin marketplace
-/plugin marketplace add https://github.com/happy-nut/claude-plugin-viban
-
-# Install the plugin
-/plugin install viban
-
-# Install dependencies (first time only)
-/viban:setup
-
-# Now you can use:
-/viban:assign
-/viban:task
-```
+</details>
 
 ## Usage
 
