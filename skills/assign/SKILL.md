@@ -205,6 +205,16 @@ After approval: Delete issue from viban TUI
 
 ---
 
+## CRITICAL: Status Transition Rule
+
+> **NEVER end this skill with the issue still in `in_progress`.**
+>
+> Before exiting — whether you completed all phases or stopped early due to errors:
+> ```bash
+> viban review $ISSUE_ID
+> ```
+> This is MANDATORY. If you skip this, the board becomes stale and misleading.
+
 ## CLI Reference
 
 | Command | Description |
