@@ -77,11 +77,15 @@ auto_update_check() {
     # Compare and auto-update if newer version available
     if [[ -n "$cached_latest" && "$cached_latest" != "$current" ]]; then
         # Simple semver comparison: split on dots and compare numerically
-        local IFS='.'
-        local -a cv=($current) lv=($cached_latest)
-        local is_newer=false
+        local -a cv lv
+        cv=("${(@s/./)current}")
+        lv=("${(@s/./)cached_latest}")
+        local is_newer=false c l
         for i in 1 2 3; do
-            local c=${cv[$i]:-0} l=${lv[$i]:-0}
+            c=${cv[$i]:-0}; l=${lv[$i]:-0}
+            # Strip non-numeric suffixes (e.g. 1-beta -> 1)
+            c=${c%%[^0-9]*}; l=${l%%[^0-9]*}
+            [[ -z "$c" ]] && c=0; [[ -z "$l" ]] && l=0
             if (( l > c )); then
                 is_newer=true
                 break
