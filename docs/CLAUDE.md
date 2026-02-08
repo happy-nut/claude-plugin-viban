@@ -29,6 +29,14 @@ EOF
 - 스피너 있을 때/없을 때 둘 다 확인
 - 한글 포함 제목 truncation
 
+## Release Rules
+
+**릴리즈는 사용자가 명시적으로 요청할 때만 수행한다.**
+
+- 버전 범프, git tag, git push --tags 를 자동으로 하지 않는다
+- 사용자가 `/viban:release` 또는 "릴리즈 해줘" 라고 할 때만 수행
+- 커밋은 자유롭게 하되, 릴리즈(버전 범프 + 태그 + 푸시)는 반드시 사용자 승인 후
+
 ## Workflow Rules
 
 ### 🔴 Worktree 사용 금지
