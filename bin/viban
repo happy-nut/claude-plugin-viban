@@ -630,7 +630,8 @@ build_column_lines() {
             spinner_prefix="${SPINNER_FRAMES[$((SPINNER_IDX % ${#SPINNER_FRAMES[@]} + 1))]} "
             spinner_w=2  # char(1) + space(1)
         fi
-        local title_w=$((card_inner - 7 - spinner_w))
+        local prefix_w=$((4 + ${#id} + spinner_w))  # "  #" + id_digits + " " + spinner
+        local title_w=$((card_inner - prefix_w - 1))  # -1 right margin for width safety
         local short=$(truncate_str "$title" $title_w)
         local title_content="  ${spinner_prefix}#$id $short"
         local title_content_w=$(str_width "$title_content")
