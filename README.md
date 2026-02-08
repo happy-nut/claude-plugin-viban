@@ -50,6 +50,7 @@ This separation keeps your workflow clean and prevents context switching.
 ## Requirements
 
 - zsh
+- python3 (macOS/Linux built-in)
 - [gum](https://github.com/charmbracelet/gum)
 - [jq](https://jqlang.github.io/jq/)
 
@@ -289,7 +290,8 @@ claude-plugin-viban/
 ├── docs/
 │   └── CLAUDE.md            # Claude Code integration guide
 ├── scripts/
-│   └── check-deps.sh        # Dependency checker
+│   ├── check-deps.sh        # Dependency checker
+│   └── tui_coprocess.py     # Persistent Python coprocess for TUI rendering
 ├── skills/
 │   ├── assign/SKILL.md      # /viban:assign skill
 │   ├── setup/SKILL.md       # /viban:setup skill

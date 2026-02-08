@@ -33,6 +33,7 @@ check_dep() {
     fi
 }
 
+check_dep "python3" "brew install python3" "apt install python3"
 check_dep "gum" "brew install gum" "See https://github.com/charmbracelet/gum#installation"
 check_dep "jq" "brew install jq" "apt install jq"
 

@@ -36,6 +36,7 @@ Check which dependencies are already installed:
 
 ```bash
 command -v zsh &> /dev/null && echo "✓ zsh" || echo "✗ zsh"
+command -v python3 &> /dev/null && echo "✓ python3" || echo "✗ python3"
 command -v gum &> /dev/null && echo "✓ gum" || echo "✗ gum"
 command -v jq &> /dev/null && echo "✓ jq" || echo "✗ jq"
 command -v viban &> /dev/null && echo "✓ viban" || echo "✗ viban"
@@ -114,6 +115,7 @@ If successful, show:
 
 All dependencies installed:
   ✓ zsh
+  ✓ python3
   ✓ gum
   ✓ jq
   ✓ viban

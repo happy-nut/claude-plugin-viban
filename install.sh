@@ -124,6 +124,9 @@ echo ""
 # Install zsh (required for viban script)
 install_pkg "zsh"
 
+# Install python3 (required for TUI coprocess)
+install_pkg "python3"
+
 # Install jq
 install_pkg "jq"
 
