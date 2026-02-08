@@ -504,13 +504,10 @@ print_center() {
 draw_header() {
     printf '\033[K\n'
     print_center "VIBAN" "${A_BOLD}${A_ACCENT}"
-    local repo_name
+    local repo_name subtitle="Vibe Kanban"
     repo_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)
-    if [[ -n "$repo_name" ]]; then
-        print_center "$repo_name" "${A_DIM}"
-    else
-        print_center "Vibe Kanban" "${A_DIM}"
-    fi
+    [[ -n "$repo_name" ]] && subtitle="Vibe Kanban · $repo_name"
+    print_center "$subtitle" "${A_DIM}"
     printf '\033[K\n'
 }
 
