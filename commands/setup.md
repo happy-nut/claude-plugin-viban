@@ -1,5 +1,5 @@
 ---
-description: "Install viban dependencies (zsh, gum, jq) automatically"
+description: "Install viban dependencies and configure project workflow via interview"
 ---
 
 # /setup - Install Dependencies
@@ -124,6 +124,137 @@ You can now use:
   /assign            Auto-resolve next issue
   /task              Create structured issue
 ```
+
+### Step 6: Workflow Setup Introduction
+
+After dependencies are installed, explain to the user:
+
+```
+╭──────────────────────────────────────────────────╮
+│         Workflow Setup (Optional)                 │
+╰──────────────────────────────────────────────────╯
+
+/viban:assign uses your project's CLAUDE.md workflow
+as the TOP PRIORITY when resolving issues.
+
+Without a workflow, a default 4-step process is used.
+Let's set up a custom workflow for this project now.
+```
+
+Ask the user with AskUserQuestion whether they want to configure a workflow now or skip.
+
+- **"Configure workflow"** → Continue to Step 7
+- **"Skip"** → End setup
+
+### Step 7: Workflow Interview
+
+Use AskUserQuestion for each question. Collect all answers before generating.
+
+**Q1. Project Type**
+- header: "Project"
+- options:
+  - "Web Frontend" (React, Vue, Svelte, etc.)
+  - "Web Backend" (API server, microservice)
+  - "CLI / Library"
+  - "Fullstack" (frontend + backend)
+- multiSelect: false
+
+**Q2. Build & Test Command**
+- header: "Build/Test"
+- options:
+  - "`npm run build && npm test`"
+  - "`pnpm build && pnpm test`"
+  - "`pytest`"
+  - "`cargo build && cargo test`"
+- multiSelect: false
+- (User can select "Other" to type a custom command)
+
+**Q3. Verification Method**
+- header: "Verify"
+- options:
+  - "Browser test (Playwright / Chrome DevTools)"
+  - "API endpoint test (curl / WebFetch)"
+  - "CLI output check"
+  - "No manual verification (tests are enough)"
+- multiSelect: true
+
+**Q4. Commit Convention**
+- header: "Commits"
+- options:
+  - "Conventional Commits (`feat:`, `fix:`, `chore:`, etc.)"
+  - "Free-form messages"
+- multiSelect: false
+- (User can select "Other" to type a custom convention)
+
+**Q5. Additional Rules (Optional)**
+- Ask with AskUserQuestion:
+  - header: "Rules"
+  - question: "Any additional project-specific rules? (e.g. 'always update CHANGELOG', 'use Korean commit messages')"
+  - options:
+    - "No additional rules"
+    - "Let me type rules"
+  - multiSelect: false
+- If user selects "Let me type rules", collect their free-text input.
+
+### Step 8: Generate CLAUDE.md Workflow
+
+Based on interview answers, generate (or append to) the project root `CLAUDE.md`.
+
+**If CLAUDE.md does not exist**: Create it with the workflow section.
+**If CLAUDE.md exists but has no `## Issue Resolution Workflow`**: Append the section.
+**If CLAUDE.md already has `## Issue Resolution Workflow`**: Ask user whether to overwrite or skip.
+
+Generated template:
+
+```markdown
+## Issue Resolution Workflow
+
+> This workflow is automatically applied when running `/viban:assign`.
+
+### Step 1: Analyze
+- Read issue description via `viban get {id}`
+- Find relevant code files
+- Understand the root cause
+
+### Step 2: Implement
+- Make minimal, focused changes
+- {ADDITIONAL_RULES from Q5, if any}
+
+### Step 3: Verify
+- {VERIFICATION_METHODS from Q3}
+
+### Step 4: Build & Test
+- Run: `{BUILD_TEST_COMMAND from Q2}`
+
+### Step 5: Commit & PR
+- Commit convention: {CONVENTION from Q4}
+- Create PR via `gh pr create`
+
+### Step 6: Complete
+- Run `viban review {id}` to move to human review
+```
+
+**Template variable mapping:**
+
+| Variable | Source | Example |
+|----------|--------|---------|
+| `{VERIFICATION_METHODS}` | Q3 answers joined as bullet list | `- Browser test with Playwright` |
+| `{BUILD_TEST_COMMAND}` | Q2 answer | `npm run build && npm test` |
+| `{CONVENTION}` | Q4 answer | `Conventional Commits (feat:, fix:, etc.)` |
+| `{ADDITIONAL_RULES}` | Q5 answer (omit line if empty) | `- Always update CHANGELOG.md` |
+
+After writing CLAUDE.md, confirm:
+
+```
+╭──────────────────────────────────────────────────╮
+│     Workflow saved to CLAUDE.md! ✨              │
+╰──────────────────────────────────────────────────╯
+
+/viban:assign will now follow your custom workflow.
+You can edit CLAUDE.md anytime to adjust it.
+```
+
+---
 
 ## Error Handling
 

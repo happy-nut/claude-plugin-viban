@@ -7,3 +7,4 @@ viban.json
 *.swp
 *.swo
 *~
+.omc/

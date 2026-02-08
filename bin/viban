@@ -584,13 +584,22 @@ _ESC=$'\e'
 pad_to_width() {
     local line="$1"
     local width="$2"
+    local precomputed_w="${3:-}"
     # Strip ANSI codes: ESC [ followed by numbers/semicolons, ending with letter
     local plain="${line//${_ESC}\[[0-9;]#[a-zA-Z]/}"
-    # Calculate display width: char count + (bytes - chars) / 2 for CJK chars
-    local char_count=${#plain} byte_count
-    LC_ALL=C byte_count=${#plain}
-    unset LC_ALL  # Restore default locale to prevent affecting subsequent calls
-    local display_w=$(( char_count + (byte_count - char_count) / 2 ))
+    local display_w
+    if [[ -n "$precomputed_w" ]]; then
+        display_w=$precomputed_w
+    else
+        local char_count=${#plain} byte_count
+        LC_ALL=C byte_count=${#plain}
+        unset LC_ALL
+        if [[ $byte_count -eq $char_count ]]; then
+            display_w=$char_count
+        else
+            display_w=$(( char_count + (byte_count - char_count) / 2 ))
+        fi
+    fi
     local pad=$((width - display_w))
     printf '%s' "$line"
     (( pad > 0 )) && printf "%${pad}s" ""
@@ -618,14 +627,63 @@ draw_board() {
     col2=("${(@f)$(build_column_lines "in_progress" $((col_sel == 1)) $c2 $max_h $col_w "$json_data")}")
     col3=("${(@f)$(build_column_lines "review" $((col_sel == 2)) $c3 $max_h $col_w "$json_data")}")
 
-    # Merge line by line
-    local i
+    # Batch compute display widths for all non-ASCII lines (single Python call)
+    # Build input: all lines from all 3 columns, ANSI-stripped
+    local -a all_plains
+    local -a all_widths
+    local _needs_python=0
+    local i _plain _cc _bc
     for ((i=1; i<=max_h; i++)); do
-        pad_to_width "${col1[$i]}" $col_w
+        for _col_line in "${col1[$i]}" "${col2[$i]}" "${col3[$i]}"; do
+            _plain="${_col_line//${_ESC}\[[0-9;]#[a-zA-Z]/}"
+            all_plains+=("$_plain")
+            _cc=${#_plain}
+            LC_ALL=C _bc=${#_plain}
+            unset LC_ALL
+            if [[ $_bc -eq $_cc ]]; then
+                all_widths+=($_cc)
+            else
+                all_widths+=(-1)  # marker: needs Python
+                _needs_python=1
+            fi
+        done
+    done
+
+    if (( _needs_python )); then
+        # Single Python call to compute all non-ASCII widths
+        local _input="" _idx
+        for ((_idx=1; _idx<=${#all_plains[@]}; _idx++)); do
+            if [[ ${all_widths[$_idx]} -eq -1 ]]; then
+                _input+="${all_plains[$_idx]}"$'\n'
+            fi
+        done
+        local -a _py_results
+        _py_results=("${(@f)$(python3 -c "
+import unicodedata,sys
+for line in sys.stdin.read().rstrip('\n').split('\n'):
+    print(sum(2 if unicodedata.east_asian_width(c) in 'FW' else 1 for c in line))
+" <<< "$_input")}")
+        # Map Python results back to width array
+        local _pi=1
+        for ((_idx=1; _idx<=${#all_widths[@]}; _idx++)); do
+            if [[ ${all_widths[$_idx]} -eq -1 ]]; then
+                all_widths[$_idx]=${_py_results[$_pi]}
+                ((_pi++))
+            fi
+        done
+    fi
+
+    # Merge line by line using precomputed widths
+    local _wi=1
+    for ((i=1; i<=max_h; i++)); do
+        pad_to_width "${col1[$i]}" $col_w "${all_widths[$_wi]}"
+        ((_wi++))
         printf "${A_DIM}│${A_RESET}"
-        pad_to_width "${col2[$i]}" $col_w
+        pad_to_width "${col2[$i]}" $col_w "${all_widths[$_wi]}"
+        ((_wi++))
         printf "${A_DIM}│${A_RESET}"
-        pad_to_width "${col3[$i]}" $col_w
+        pad_to_width "${col3[$i]}" $col_w "${all_widths[$_wi]}"
+        ((_wi++))
         printf '\033[K\n'
     done
 }
@@ -1080,6 +1138,7 @@ cmd_priority() {
 cmd_add() {
     init_json
     [[ -z "$1" ]] && { echo "Usage: viban add \"title\" [\"description\"] [priority] [type] [attachments...]"; exit 1; }
+    local title="$1"
     local id=$(get_next_id) now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local desc="${2:-}"
     local priority="${3:-P3}"
@@ -1099,7 +1158,7 @@ cmd_add() {
     # Order is only assigned when manually moved
     local tmpjson=$(mktemp)
     printf '%s' "$desc" > "$tmpjson"
-    jq --arg id "$id" --arg title "$1" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --argjson attachments "$attachments_json" --arg now "$now" '
+    jq --arg id "$id" --arg title "$title" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --argjson attachments "$attachments_json" --arg now "$now" '
         .next_id = ((.next_id // 0) + 1) |
         .issues += [{
             id:($id|tonumber),
