@@ -36,6 +36,82 @@ check_dependencies() {
 # Only check dependencies for interactive commands (not help)
 [[ "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]] && check_dependencies
 
+# ============================================================
+# Auto-update Check (once per day, cached)
+# ============================================================
+_VIBAN_UPDATE_CACHE="${HOME}/.cache/viban/update-check"
+
+auto_update_check() {
+    local cache_dir="${HOME}/.cache/viban"
+    mkdir -p "$cache_dir"
+
+    local now=$(date +%s)
+    local last_check=0
+    local cached_latest=""
+
+    # Read cache
+    if [[ -f "$_VIBAN_UPDATE_CACHE" ]]; then
+        last_check=$(sed -n '1p' "$_VIBAN_UPDATE_CACHE" 2>/dev/null)
+        cached_latest=$(sed -n '2p' "$_VIBAN_UPDATE_CACHE" 2>/dev/null)
+        [[ -z "$last_check" ]] && last_check=0
+    fi
+
+    local current
+    current=$(grep '"version"' "$VIBAN_SCRIPT_DIR/package.json" 2>/dev/null | sed 's/.*: *"\([^"]*\)".*/\1/')
+    [[ -z "$current" ]] && return
+
+    # Check npm registry at most once per day (86400 seconds)
+    local elapsed=$((now - last_check))
+    if (( elapsed > 86400 )); then
+        # Background check: fetch latest version and write cache
+        {
+            local latest
+            latest=$(npm show claude-plugin-viban version 2>/dev/null)
+            if [[ -n "$latest" ]]; then
+                printf '%s\n%s\n' "$now" "$latest" > "$_VIBAN_UPDATE_CACHE"
+            fi
+        } &!
+        # Use cached_latest from previous check for this invocation
+    fi
+
+    # Compare and auto-update if newer version available
+    if [[ -n "$cached_latest" && "$cached_latest" != "$current" ]]; then
+        # Simple semver comparison: split on dots and compare numerically
+        local IFS='.'
+        local -a cv=($current) lv=($cached_latest)
+        local is_newer=false
+        for i in 1 2 3; do
+            local c=${cv[$i]:-0} l=${lv[$i]:-0}
+            if (( l > c )); then
+                is_newer=true
+                break
+            elif (( l < c )); then
+                break
+            fi
+        done
+
+        if $is_newer; then
+            echo "📦 New version available: $current → $cached_latest"
+            echo "   Updating..."
+            if npm install -g claude-plugin-viban@"$cached_latest" 2>/dev/null; then
+                echo "   ✓ Updated to $cached_latest"
+                # Clear cache so next check is fresh
+                rm -f "$_VIBAN_UPDATE_CACHE"
+                # Re-exec with the new version
+                exec "$0" "$@"
+            else
+                echo "   ✗ Update failed, continuing with $current"
+            fi
+        fi
+    fi
+}
+
+# Run auto-update for all commands except help/version/update itself
+case "$1" in
+    help|--help|-h|--version|-v|update) ;;
+    *) auto_update_check "$@" ;;
+esac
+
 IN_TUI=false
 cleanup() {
     printf '\033[?25h\033[0m'
