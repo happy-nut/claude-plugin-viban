@@ -160,6 +160,16 @@ VIBAN_JSON="${VIBAN_DATA_DIR}/viban.json"
 # Ensure data directory exists
 mkdir -p "$VIBAN_DATA_DIR"
 
+# Auto-migrate: .viban/viban.json -> .git/ when git repo is initialized
+if $VIBAN_IS_GIT_REPO; then
+    _legacy_json="${PWD}/.viban/viban.json"
+    if [[ -f "$_legacy_json" && ! -f "$VIBAN_JSON" ]]; then
+        mv "$_legacy_json" "$VIBAN_JSON"
+        rmdir "${PWD}/.viban" 2>/dev/null
+        echo "✓ Migrated viban data from .viban/ to git directory"
+    fi
+fi
+
 # ============================================================
 # Initialize viban.json if not exists
 # ============================================================
@@ -251,7 +261,9 @@ update_term_cache() {
         CACHED_TERM_H=$(tput lines 2>/dev/null || echo 30)
     fi
     CACHED_COL_W=$(( (CACHED_TERM_W - 2) / 3 ))
-    CACHED_MAX_H=$((CACHED_TERM_H - 8))
+    local _header_extra=0
+    $VIBAN_IS_GIT_REPO || _header_extra=1
+    CACHED_MAX_H=$((CACHED_TERM_H - 8 - _header_extra))
     CACHED_MAX_TASKS=$((CACHED_MAX_H / 5))
     (( CACHED_MAX_TASKS < 2 )) && CACHED_MAX_TASKS=2
     (( CACHED_MAX_TASKS > 8 )) && CACHED_MAX_TASKS=8
@@ -508,6 +520,9 @@ draw_header() {
     repo_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)
     [[ -n "$repo_name" ]] && subtitle="Vibe Kanban · $repo_name"
     print_center "$subtitle" "${A_DIM}"
+    if ! $VIBAN_IS_GIT_REPO; then
+        print_center "⚠ Not a git repo · assign/PR unavailable" "${A_DIM}"
+    fi
     printf '\033[K\n'
 }
 
