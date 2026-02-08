@@ -520,7 +520,32 @@ draw_header() {
     _ver=$(grep '"version"' "$VIBAN_SCRIPT_DIR/package.json" 2>/dev/null | sed 's/.*: *"\([^"]*\)".*/\1/')
     repo_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)
     [[ -n "$repo_name" ]] && subtitle="Vibe Kanban · $repo_name"
-    [[ -n "$_ver" ]] && subtitle="$subtitle · v$_ver"
+    if [[ -n "$_ver" ]]; then
+        subtitle="$subtitle · v$_ver"
+        # Check for update availability from cache
+        if [[ -f "$_VIBAN_UPDATE_CACHE" ]]; then
+            local cached_latest
+            cached_latest=$(sed -n '2p' "$_VIBAN_UPDATE_CACHE" 2>/dev/null)
+            if [[ -n "$cached_latest" && "$cached_latest" != "$_ver" ]]; then
+                local -a cv lv
+                cv=("${(@s/./)_ver}")
+                lv=("${(@s/./)cached_latest}")
+                local _is_newer=false _c _l
+                for i in 1 2 3; do
+                    _c=${cv[$i]:-0}; _l=${lv[$i]:-0}
+                    _c=${_c%%[^0-9]*}; _l=${_l%%[^0-9]*}
+                    [[ -z "$_c" ]] && _c=0; [[ -z "$_l" ]] && _l=0
+                    if (( _l > _c )); then
+                        _is_newer=true
+                        break
+                    elif (( _l < _c )); then
+                        break
+                    fi
+                done
+                $_is_newer && subtitle="$subtitle → v$cached_latest"
+            fi
+        fi
+    fi
     print_center "$subtitle" "${A_DIM}"
     if ! $VIBAN_IS_GIT_REPO; then
         print_center "⚠ Not a git repo · assign/PR unavailable" "${A_DIM}"

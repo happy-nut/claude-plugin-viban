@@ -1,30 +1,77 @@
 ---
+name: add
 description: "Analyze problem and register as viban issue with evidence"
+enter_plan_mode: true
 ---
 
-# /task - Problem Analysis and Issue Registration
+# /add - Problem Analysis and Issue Registration
 
 Analyze problem situation and register as viban issue with file locations and evidence.
 
 > **Core Principle**: Focus on **symptoms and problem definition**, not solutions.
 > Solutions are decided by the assignee after understanding full context.
 
-## Input Verification
+## Interview Phase (Required)
 
-**User Input**: `$ARGUMENTS`
+**Always start with an interview** to gather complete context before exploring code.
 
-If input is empty or unclear:
-1. Use AskUserQuestion to ask about the problem
-2. Proceed after receiving response
+### Interview Questions
+
+Use AskUserQuestion to ask these questions (can combine related ones):
+
+**1. Problem Identification**
+```
+What problem are you experiencing?
+
+- Error message or unexpected behavior
+- What feature/page is affected
+- When did it start happening
+```
+
+**2. Reproduction Context**
+```
+How can this be reproduced?
+
+- Step-by-step actions
+- Environment (local/staging/production)
+- Frequency (always/sometimes/once)
+```
+
+**3. Expected vs Actual**
+```
+What should happen vs what actually happens?
+
+- Expected behavior
+- Actual result
+- Any error messages or logs
+```
+
+**4. Additional Context** (optional, ask if needed)
+```
+Any additional context?
+
+- Recent changes that might be related
+- Workarounds tried
+- Related issues or features
+```
+
+### Interview Strategy
+
+- Ask 1-2 questions at a time using AskUserQuestion
+- Provide options when possible for faster responses
+- Stop interviewing when you have enough to:
+  1. Search for relevant code
+  2. Determine priority and type
+  3. Write clear symptoms
 
 ## Execution Steps
 
-### Step 1: Problem Identification
+### Step 1: Problem Identification (from interview)
 
-Analyze the problem described by user:
-1. **Identify symptoms**: Clearly define what the problem is
-2. **Extract keywords**: Error messages, feature names, module names, etc.
-3. **Determine priority**:
+From the interview responses, extract:
+1. **Symptoms**: Clearly define what the problem is
+2. **Keywords**: Error messages, feature names, module names
+3. **Priority**:
    | Condition | Priority |
    |-----------|----------|
    | System down, data loss | P0 |
@@ -95,7 +142,7 @@ Error log or stack trace
 ### Step 4: Register viban Issue
 
 ```bash
-viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type} [attachments...]
+viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type}
 ```
 
 **Parameters**:
@@ -103,7 +150,6 @@ viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type} [attachm
 - `description`: Issue body (Markdown)
 - `priority`: P0, P1, P2, P3 (default: P3)
 - `type`: bug, feat, chore, refactor
-- `attachments`: (optional) File paths to attach (screenshots, logs, etc.)
 
 **Examples**:
 ```bash
@@ -115,41 +161,7 @@ viban add "Dark mode support" "$'## Symptoms\n...'" P2 feat
 
 # REFACTOR issue
 viban add "Separate auth logic" "$'## Symptoms\n...'" P3 refactor
-
-# With screenshot attachments
-viban add "Layout broken on mobile" "$'## Symptoms\n...'" P1 bug ./screenshots/mobile-bug.png
-
-# With multiple attachments
-viban add "Chart rendering issue" "$'## Symptoms\n...'" P1 bug ./error.png ./console-log.txt
 ```
-
-### Step 4a: Attaching Screenshots (Recommended for Visual Issues)
-
-For visual bugs (layout issues, UI glitches, rendering problems), attaching screenshots significantly helps:
-
-1. **Take a screenshot** of the problem:
-   - macOS: `Cmd + Shift + 4` (selection) or `Cmd + Shift + 3` (full screen)
-   - Save to project directory: `./screenshots/` or `./.viban/attachments/`
-
-2. **Attach during creation**:
-   ```bash
-   viban add "Button misaligned on dashboard" "$'## Symptoms\n...'" P1 bug ./screenshots/button-issue.png
-   ```
-
-3. **Or attach to existing issue**:
-   ```bash
-   viban attach {issue_id} ./screenshots/screenshot1.png ./screenshots/screenshot2.png
-   ```
-
-4. **View attachments**:
-   ```bash
-   viban get {issue_id}
-   ```
-
-> **Why attach screenshots?**
-> - Claude Code can read image files and understand visual context
-> - The assignee can see exactly what the problem looks like
-> - Reduces back-and-forth clarification
 
 ### Step 5: Report Results
 
@@ -169,47 +181,43 @@ Next steps:
 - `viban start {id}` to start working
 ```
 
-## When Input is Missing
+## Example Interview Flow
 
-Use AskUserQuestion with these prompts:
+**User runs**: `/viban:add`
 
+**Agent**: (AskUserQuestion)
 ```
-What problem should be registered as an issue?
+What problem are you experiencing?
 
-Please include:
-1. What is the problem? (error message, unexpected behavior, etc.)
-2. Where does it occur? (page, API, feature, etc.)
-3. How to reproduce? (step-by-step)
-```
-
-## Example
-
-**Input**: "Charts not showing on backtest results page"
-
-**Analysis Process**:
-1. Keywords: backtest, results, chart
-2. Code exploration:
-   ```bash
-   grep -r "chart" . --include="*.tsx" --include="*.ts"
-   ```
-3. Related file found: `src/pages/backtest/results.tsx`
-4. Check chart rendering logic
-
-**Registration Command**:
-```bash
-viban add "Backtest results chart not displayed" "$'## Symptoms\n...'" P1 bug
+Options:
+- Something is broken/erroring
+- Feature not working as expected
+- Performance issue
+- Need new feature/improvement
+- Other
 ```
 
-**Registered Issue**:
+**User selects**: "Something is broken/erroring"
+
+**Agent**: (AskUserQuestion)
 ```
-Title: Backtest results chart not displayed
-Priority: P1
-Type: bug
-Location: src/pages/backtest/results.tsx
+Please describe the error:
+
+1. What action triggers it?
+2. What error message do you see?
+3. Which page/feature is affected?
 ```
+
+**User responds**: "When I click the chart on backtest results, nothing happens. Console shows 'Cannot read property of undefined'"
+
+**Agent**: Now has enough context to:
+1. Search for chart-related code in backtest
+2. Look for the specific error pattern
+3. Register issue with proper details
 
 ## Important Notes
 
+- **Interview First**: Always gather context before code exploration
 - **Location Required**: Do not register without file path
 - **Evidence Required**: Do not register based on guesses without code exploration
 - **Avoid Solutions**: Do not write specific solutions (assignee decides)
@@ -218,13 +226,3 @@ Location: src/pages/backtest/results.tsx
   viban list
   ```
 - **Accurate Priority**: P0 only for system-down level, avoid over-estimation
-
-## Final Step: Auto Update Check
-
-After completing issue registration, run:
-
-```bash
-viban update
-```
-
-This silently checks for updates and only outputs if an update is applied.
