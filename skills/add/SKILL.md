@@ -141,26 +141,54 @@ Error log or stack trace
 
 ### Step 4: Register viban Issue
 
+Write the description body to a temp file using a heredoc, then pass via `--desc-file`:
+
 ```bash
-viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type}
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+One-sentence summary...
+
+## Reproduction Steps
+1. ...
+
+## Location
+- File: `path/to/file.ext`
+VIBAN_EOF
+
+viban add "{short_title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type}
 ```
 
+**Why heredoc?** Using `<<'VIBAN_EOF'` (single-quoted delimiter) prevents shell interpretation of backticks, `$`, parentheses, and other special characters in the description.
+
 **Parameters**:
-- `title`: Plain title (no tags)
-- `description`: Issue body (Markdown)
-- `priority`: P0, P1, P2, P3 (default: P3)
-- `type`: bug, feat, chore, refactor
+- `title`: Plain title (no tags) — first positional argument
+- `--desc-file`: Path to file containing issue body (Markdown)
+- `--priority`: P0, P1, P2, P3 (default: P3)
+- `--type`: bug, feat, chore, refactor
 
 **Examples**:
 ```bash
 # BUG issue
-viban add "API response timeout" "$'## Symptoms\n...'" P1 bug
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+API responds with 504 after 30 seconds.
+- File: `src/api/handler.ts:42`
+VIBAN_EOF
+viban add "API response timeout" --desc-file /tmp/viban-desc.md --priority P1 --type bug
 
 # FEATURE issue
-viban add "Dark mode support" "$'## Symptoms\n...'" P2 feat
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+Users request dark mode support.
+VIBAN_EOF
+viban add "Dark mode support" --desc-file /tmp/viban-desc.md --priority P2 --type feat
 
 # REFACTOR issue
-viban add "Separate auth logic" "$'## Symptoms\n...'" P3 refactor
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+Auth logic is duplicated across 3 modules.
+VIBAN_EOF
+viban add "Separate auth logic" --desc-file /tmp/viban-desc.md --priority P3 --type refactor
 ```
 
 ### Step 5: Report Results

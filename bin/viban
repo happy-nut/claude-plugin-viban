@@ -4,7 +4,8 @@
 setopt EXTENDED_GLOB
 
 # Store script directory at startup (before any function changes $0)
-VIBAN_SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Resolve symlinks so npm global installs (bin/viban -> ../lib/node_modules/.../bin/viban) work
+VIBAN_SCRIPT_DIR="$(cd "$(dirname "${0:A}")/.." && pwd)"
 
 # ============================================================
 # Dependency Check (Early exit with helpful messages)
@@ -1273,6 +1274,7 @@ cmd_add() {
         case "$1" in
             --title)     title="$2"; shift 2 ;;
             --desc|--description) desc="$2"; shift 2 ;;
+            --desc-file) [[ -f "$2" ]] && desc="$(cat "$2")"; shift 2 ;;
             --priority)  priority="$2"; shift 2 ;;
             --type)      issue_type="$2"; shift 2 ;;
             --attach|--attachments) shift; while [[ $# -gt 0 && "$1" != --* ]]; do attachments+=("$1"); shift; done ;;

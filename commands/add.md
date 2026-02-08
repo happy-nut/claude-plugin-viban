@@ -94,33 +94,55 @@ Error log or stack trace
 
 ### Step 4: Register viban Issue
 
+Write the description body to a temp file using a heredoc, then pass via `--desc-file`:
+
 ```bash
-viban add "{short_title}" "$'## Symptoms\n...(body)'" {priority} {type} [attachments...]
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+One-sentence summary...
+
+## Reproduction Steps
+1. ...
+
+## Location
+- File: `path/to/file.ext`
+VIBAN_EOF
+
+viban add "{short_title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type}
 ```
 
+**Why heredoc?** Using `<<'VIBAN_EOF'` (single-quoted delimiter) prevents shell interpretation of backticks, `$`, parentheses, and other special characters in the description.
+
 **Parameters**:
-- `title`: Plain title (no tags)
-- `description`: Issue body (Markdown)
-- `priority`: P0, P1, P2, P3 (default: P3)
-- `type`: bug, feat, chore, refactor
-- `attachments`: (optional) File paths to attach (screenshots, logs, etc.)
+- `title`: Plain title (no tags) — first positional argument
+- `--desc-file`: Path to file containing issue body (Markdown)
+- `--priority`: P0, P1, P2, P3 (default: P3)
+- `--type`: bug, feat, chore, refactor
+- `--attach`: (optional) File paths to attach (screenshots, logs, etc.)
 
 **Examples**:
 ```bash
 # BUG issue
-viban add "API response timeout" "$'## Symptoms\n...'" P1 bug
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+API responds with 504 after 30 seconds.
+- File: `src/api/handler.ts:42`
+VIBAN_EOF
+viban add "API response timeout" --desc-file /tmp/viban-desc.md --priority P1 --type bug
 
 # FEATURE issue
-viban add "Dark mode support" "$'## Symptoms\n...'" P2 feat
-
-# REFACTOR issue
-viban add "Separate auth logic" "$'## Symptoms\n...'" P3 refactor
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+Users request dark mode support.
+VIBAN_EOF
+viban add "Dark mode support" --desc-file /tmp/viban-desc.md --priority P2 --type feat
 
 # With screenshot attachments
-viban add "Layout broken on mobile" "$'## Symptoms\n...'" P1 bug ./screenshots/mobile-bug.png
-
-# With multiple attachments
-viban add "Chart rendering issue" "$'## Symptoms\n...'" P1 bug ./error.png ./console-log.txt
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+Layout broken on mobile viewport.
+VIBAN_EOF
+viban add "Layout broken on mobile" --desc-file /tmp/viban-desc.md --priority P1 --type bug --attach ./screenshots/mobile-bug.png
 ```
 
 ### Step 4a: Attaching Screenshots (Recommended for Visual Issues)
@@ -133,7 +155,7 @@ For visual bugs (layout issues, UI glitches, rendering problems), attaching scre
 
 2. **Attach during creation**:
    ```bash
-   viban add "Button misaligned on dashboard" "$'## Symptoms\n...'" P1 bug ./screenshots/button-issue.png
+   viban add "Button misaligned on dashboard" --desc-file /tmp/viban-desc.md --priority P1 --type bug --attach ./screenshots/button-issue.png
    ```
 
 3. **Or attach to existing issue**:
@@ -197,7 +219,12 @@ Please include:
 
 **Registration Command**:
 ```bash
-viban add "Backtest results chart not displayed" "$'## Symptoms\n...'" P1 bug
+cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+## Symptoms
+Backtest results chart not displayed when clicking chart tab.
+- File: `src/pages/backtest/results.tsx`
+VIBAN_EOF
+viban add "Backtest results chart not displayed" --desc-file /tmp/viban-desc.md --priority P1 --type bug
 ```
 
 **Registered Issue**:
