@@ -67,8 +67,11 @@ If tests fail: **stop and inform user**. Do not release with failing tests.
 # Update package.json version
 # (use jq or sed to update the version field)
 
+# IMPORTANT: Also update .claude-plugin/plugin.json version to stay in sync
+# (marketplace uses plugin.json version for caching)
+
 # Commit
-git add package.json
+git add package.json .claude-plugin/plugin.json
 git commit -m "{new_version}"
 
 # Tag
