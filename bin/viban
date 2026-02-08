@@ -515,12 +515,12 @@ print_center() {
 # Draw header with pure ANSI
 draw_header() {
     printf '\033[K\n'
-    local _ver
+    print_center "VIBAN" "${A_BOLD}${A_ACCENT}"
+    local _ver repo_name subtitle="Vibe Kanban"
     _ver=$(grep '"version"' "$VIBAN_SCRIPT_DIR/package.json" 2>/dev/null | sed 's/.*: *"\([^"]*\)".*/\1/')
-    print_center "VIBAN${_ver:+ v$_ver}" "${A_BOLD}${A_ACCENT}"
-    local repo_name subtitle="Vibe Kanban"
     repo_name=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null)
     [[ -n "$repo_name" ]] && subtitle="Vibe Kanban · $repo_name"
+    [[ -n "$_ver" ]] && subtitle="$subtitle · v$_ver"
     print_center "$subtitle" "${A_DIM}"
     if ! $VIBAN_IS_GIT_REPO; then
         print_center "⚠ Not a git repo · assign/PR unavailable" "${A_DIM}"
