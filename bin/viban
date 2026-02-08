@@ -119,12 +119,69 @@ esac
 
 IN_TUI=false
 cleanup() {
+    # Skip cleanup in subshells — EXIT trap fires in $() command substitutions
+    [[ ${ZSH_SUBSHELL:-0} -gt 0 ]] && return
+    _stop_coproc
     printf '\033[?25h\033[0m'
     stty echo 2>/dev/null
     $IN_TUI && clear
     exit 0
 }
 trap cleanup INT TERM EXIT
+
+# Python coprocess for TUI rendering (eliminates per-frame spawn overhead)
+# Uses explicit file descriptors (fd 7/8) to avoid interfering with read -sk1
+_COPROC_PID=""
+_COPROC_RESULT=""
+
+_start_coproc() {
+    local _in_fifo _out_fifo
+    _in_fifo=$(mktemp -u /tmp/viban_cp_in.XXXXXX)
+    _out_fifo=$(mktemp -u /tmp/viban_cp_out.XXXXXX)
+    mkfifo "$_in_fifo" "$_out_fifo"
+    python3 "$VIBAN_SCRIPT_DIR/scripts/tui_coprocess.py" < "$_in_fifo" > "$_out_fifo" &
+    _COPROC_PID=$!
+    exec 7>"$_in_fifo" 8<"$_out_fifo"
+    rm -f "$_in_fifo" "$_out_fifo"
+}
+
+_stop_coproc() {
+    if [[ -n "$_COPROC_PID" ]] && kill -0 "$_COPROC_PID" 2>/dev/null; then
+        echo "QUIT" >&7 2>/dev/null
+        exec 7>&- 2>/dev/null
+        wait "$_COPROC_PID" 2>/dev/null
+    else
+        exec 7>&- 2>/dev/null
+    fi
+    exec 8<&- 2>/dev/null
+    _COPROC_PID=""
+}
+
+_coproc_batch_trunc() {
+    echo "BATCH_TRUNC" >&7
+    echo "$1" >&7
+    echo "END" >&7
+    _COPROC_RESULT=""
+    local line
+    while read -r line <&8; do
+        [[ "$line" == "END" ]] && break
+        [[ -n "$_COPROC_RESULT" ]] && _COPROC_RESULT+=$'\n'
+        _COPROC_RESULT+="$line"
+    done
+}
+
+_coproc_batch_width() {
+    echo "BATCH_WIDTH" >&7
+    echo "$1" >&7
+    echo "END" >&7
+    _COPROC_RESULT=""
+    local line
+    while read -r line <&8; do
+        [[ "$line" == "END" ]] && break
+        [[ -n "$_COPROC_RESULT" ]] && _COPROC_RESULT+=$'\n'
+        _COPROC_RESULT+="$line"
+    done
+}
 
 # Prevent gum from querying terminal colors
 export CLICOLOR_FORCE=1
@@ -449,48 +506,6 @@ get_term_height() {
     fi
 }
 
-# Get display width of string using Unicode East Asian Width property
-# F(Fullwidth) and W(Wide) = 2 columns, others = 1 column
-str_width() {
-    local str="$1"
-    local char_count=${#str}
-    local byte_count
-    LC_ALL=C byte_count=${#str}
-
-    # If all ASCII, simple calculation (fast path)
-    [[ $byte_count -eq $char_count ]] && { echo $char_count; return; }
-
-    # Use Python for accurate Unicode width calculation
-    # Note: <<< adds trailing newline, so we strip it with rstrip()
-    python3 -c "
-import unicodedata, sys
-s = sys.stdin.read().rstrip('\n')
-print(sum(2 if unicodedata.east_asian_width(c) in 'FW' else 1 for c in s))
-" <<< "$str"
-}
-
-# Truncate string to max display width (optimized)
-# Uses str_width for width calculation to ensure correct byte counting
-truncate_str() {
-    local str="$1" max=$2
-    local len=${#str}
-    local w=$(str_width "$str")
-    # If already fits, return as-is
-    (( w <= max )) && { echo "$str"; return; }
-    # Binary search for truncation point
-    local lo=0 hi=$len mid sub_str
-    while (( lo < hi )); do
-        mid=$(( (lo + hi + 1) / 2 ))
-        sub_str="${str:0:$mid}"
-        w=$(str_width "$sub_str")
-        if (( w <= max )); then
-            lo=$mid
-        else
-            hi=$((mid - 1))
-        fi
-    done
-    echo "${str:0:$lo}"
-}
 
 # ANSI color codes - Orange Theme
 A_RESET="\033[0m"
@@ -607,64 +622,120 @@ build_column_lines() {
     local card_inner=$((col_w - 4))
     local border=$(gen_border $card_inner)
 
-    # Task cards (5 lines: top border, title, desc/priority, empty, bottom border)
-    local shown=0
-    while IFS=$'\t' read -r id title desc priority issue_type; do
-        [[ -z "$id" ]] && continue
-        (( shown >= CACHED_MAX_TASKS )) && {
-            local more_text="  +$((count - shown)) more..."
-            local more_w=${#more_text}
-            printf "${A_DIM}%s${A_RESET}%$((col_w - more_w))s\n" "$more_text" ""
-            ((lines_used++))
-            break
-        }
+    # --- Pass 1: Collect card data into arrays ---
+    local -a _ids _titles _descs _priorities _types _title_max_ws _title_pfxs
+    local _has_nonascii=0
+    local _desc_max_w=$((card_inner - 4))
+    local _spinner_w=0
+    [[ "$st" == "in_progress" ]] && _spinner_w=2
+    local _cc _bc _pfx
 
-        # Default priority and type if not set
-        [[ -z "$priority" || "$priority" == "null" ]] && priority="P3"
-        [[ -z "$issue_type" || "$issue_type" == "null" ]] && issue_type=""
+    while IFS=$'\t' read -r _id _title _desc _priority _type; do
+        [[ -z "$_id" ]] && continue
+        (( ${#_ids} >= CACHED_MAX_TASKS )) && break
+        [[ -z "$_priority" || "$_priority" == "null" ]] && _priority="P3"
+        [[ -z "$_type" || "$_type" == "null" ]] && _type=""
+        [[ "$_desc" == "null" ]] && _desc=""
 
-        # Title line (with spinner for in_progress)
-        local spinner_prefix=""
-        local spinner_w=0
-        if [[ "$st" == "in_progress" ]]; then
-            spinner_prefix="${SPINNER_FRAMES[$((SPINNER_IDX % ${#SPINNER_FRAMES[@]} + 1))]} "
-            spinner_w=2  # char(1) + space(1)
+        _ids+=("$_id"); _titles+=("$_title"); _descs+=("$_desc")
+        _priorities+=("$_priority"); _types+=("$_type")
+
+        # Per-card title width limit
+        _title_max_ws+=($((card_inner - 4 - ${#_id} - _spinner_w - 1)))
+        # Prefix for width calc (X as spinner placeholder - same width 1 as braille chars)
+        _pfx="  "
+        (( _spinner_w )) && _pfx="  X "
+        _title_pfxs+=("${_pfx}#${_id} ")
+
+        # Check for non-ASCII
+        if (( ! _has_nonascii )); then
+            _cc=${#_title}
+            LC_ALL=C _bc=${#_title}; unset LC_ALL
+            (( _bc != _cc )) && _has_nonascii=1
+            if (( ! _has_nonascii && ${#_desc} > 0 )); then
+                _cc=${#_desc}; LC_ALL=C _bc=${#_desc}; unset LC_ALL
+                (( _bc != _cc )) && _has_nonascii=1
+            fi
         fi
-        local prefix_w=$((4 + ${#id} + spinner_w))  # "  #" + id_digits + " " + spinner
-        local title_w=$((card_inner - prefix_w - 1))  # -1 right margin for width safety
-        local short=$(truncate_str "$title" $title_w)
-        local title_content="  ${spinner_prefix}#$id $short"
-        local title_content_w=$(str_width "$title_content")
-        local title_pad=$((card_inner - title_content_w))
+    done <<< "$issues_data"
+
+    local _n=${#_ids}
+
+    # --- Pass 2: Batch compute truncation + widths (single Python call) ---
+    local -a _short_titles _title_cws _short_descs _desc_cws
+
+    if (( _n > 0 )); then
+        if (( _has_nonascii )); then
+            # Build batch input: 2 lines per card (title, desc)
+            # Format: max_w<TAB>prefix<TAB>string
+            local _batch_input=""
+            for (( _i=1; _i<=_n; _i++ )); do
+                _batch_input+="${_title_max_ws[$_i]}"$'\t'"${_title_pfxs[$_i]}"$'\t'"${_titles[$_i]}"$'\n'
+                _batch_input+="${_desc_max_w}"$'\t'"  "$'\t'"${_descs[$_i]}"$'\n'
+            done
+
+            # Single Python call: truncate each string and compute content width
+            local _batch_output
+            _coproc_batch_trunc "$_batch_input"
+            _batch_output="$_COPROC_RESULT"
+
+            local _li=0
+            while IFS=$'\t' read -r _tr _cw; do
+                ((_li++))
+                if (( _li % 2 == 1 )); then
+                    _short_titles+=("$_tr"); _title_cws+=($_cw)
+                else
+                    _short_descs+=("$_tr"); _desc_cws+=($_cw)
+                fi
+            done <<< "$_batch_output"
+        else
+            # All-ASCII fast path - no Python needed
+            for (( _i=1; _i<=_n; _i++ )); do
+                local _t="${_titles[$_i]}" _mw=${_title_max_ws[$_i]}
+                (( ${#_t} > _mw )) && _t="${_t:0:$_mw}"
+                _short_titles+=("$_t")
+                local _fc="${_title_pfxs[$_i]}${_t}"
+                _title_cws+=(${#_fc})
+
+                local _d="${_descs[$_i]}"
+                (( ${#_d} > _desc_max_w )) && _d="${_d:0:$_desc_max_w}"
+                _short_descs+=("$_d")
+                _desc_cws+=($((2 + ${#_d})))
+            done
+        fi
+    fi
+
+    # --- Pass 3: Render cards ---
+    local shown=0
+    for (( _i=1; _i<=_n; _i++ )); do
+        local id="${_ids[$_i]}"
+        local priority="${_priorities[$_i]}"
+        local issue_type="${_types[$_i]}"
+
+        # Title line
+        local spinner_prefix=""
+        [[ "$st" == "in_progress" ]] && spinner_prefix="${SPINNER_FRAMES[$((SPINNER_IDX % ${#SPINNER_FRAMES[@]} + 1))]} "
+        local title_content="  ${spinner_prefix}#${id} ${_short_titles[$_i]}"
+        local title_pad=$((card_inner - ${_title_cws[$_i]}))
         (( title_pad < 0 )) && title_pad=0
 
-        # Description line (dimmed, truncated)
-        local desc_w=$((card_inner - 4))
-        local desc_short=""
-        if [[ -n "$desc" && "$desc" != "null" ]]; then
-            desc_short=$(truncate_str "$desc" $desc_w)
-        fi
-        local desc_content="  $desc_short"
-        local desc_content_w=$(str_width "$desc_content")
-        local desc_pad=$((card_inner - desc_content_w))
+        # Description line
+        local desc_content="  ${_short_descs[$_i]}"
+        local desc_pad=$((card_inner - ${_desc_cws[$_i]}))
         (( desc_pad < 0 )) && desc_pad=0
 
-        # Priority and type tags on same line (e.g., [P0] [BUG])
+        # Priority and type tags
         local priority_tag="[$priority]"
         local priority_color="${PRIORITY_COLOR[$priority]:-$A_DIM}"
-        local type_tag=""
-        local type_color=""
-        local tags_content=""
-        local tags_w=0
+        local type_tag="" type_color="" tags_w=0
         if [[ -n "$issue_type" ]]; then
             type_tag="[${TYPE_LABEL[$issue_type]:-$issue_type}]"
             type_color="${TYPE_COLOR[$issue_type]:-$A_DIM}"
-            # Calculate total width: "  [P1] [BUG]"
             tags_w=$((${#priority_tag} + 1 + ${#type_tag}))
         else
             tags_w=${#priority_tag}
         fi
-        local tags_pad=$((card_inner - tags_w - 2))  # -2 for leading spaces
+        local tags_pad=$((card_inner - tags_w - 2))
 
         local border_color="$A_DIM"
         local text_color="$A_FG"
@@ -688,7 +759,14 @@ build_column_lines() {
 
         ((shown++))
         lines_used=$((lines_used + 5))
-    done <<< "$issues_data"
+    done
+
+    # Overflow indicator
+    if (( count > _n )); then
+        local more_text="  +$((count - _n)) more..."
+        printf "${A_DIM}%s${A_RESET}%$((col_w - ${#more_text}))s\n" "$more_text" ""
+        ((lines_used++))
+    fi
 
     if (( count == 0 )); then
         local no_text="  No tasks"
@@ -785,11 +863,8 @@ draw_board() {
             fi
         done
         local -a _py_results
-        _py_results=("${(@f)$(python3 -c "
-import unicodedata,sys
-for line in sys.stdin.read().rstrip('\n').split('\n'):
-    print(sum(2 if unicodedata.east_asian_width(c) in 'FW' else 1 for c in line))
-" <<< "$_input")}")
+        _coproc_batch_width "$_input"
+        _py_results=("${(@f)_COPROC_RESULT}")
         # Map Python results back to width array
         local _pi=1
         for ((_idx=1; _idx<=${#all_widths[@]}; _idx++)); do
@@ -821,9 +896,10 @@ draw_footer() {
 }
 
 read_key() {
+    local _rk_timeout="${1:-0.5}"
     local key result=""
-    # Timeout for spinner animation refresh (0.5s to prevent key drops)
-    read -sk1 -t 0.5 key 2>/dev/null || { echo "timeout"; return; }
+    # Timeout for spinner animation refresh (default 0.5s)
+    read -sk1 -t "$_rk_timeout" key 2>/dev/null || { echo "timeout"; return; }
 
     if [[ "$key" == $'\e' ]]; then
         read -sk1 -t 0.1 c2 2>/dev/null
@@ -967,6 +1043,7 @@ delete_issue() {
 
 level1_columns() {
     IN_TUI=true
+    _start_coproc
     local col=0 card=0
 
     # Hide cursor and disable input echo
