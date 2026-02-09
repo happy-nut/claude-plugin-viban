@@ -35,9 +35,10 @@ Check which dependencies are already installed:
 
 ```bash
 command -v zsh &> /dev/null && echo "✓ zsh" || echo "✗ zsh"
+command -v python3 &> /dev/null && echo "✓ python3" || echo "✗ python3"
 command -v gum &> /dev/null && echo "✓ gum" || echo "✗ gum"
 command -v jq &> /dev/null && echo "✓ jq" || echo "✗ jq"
-command -v viban &> /dev/null && echo "✓ viban" || echo "✗ viban"
+command -v viban &> /dev/null && echo "✓ viban ($(viban --version 2>/dev/null || echo 'not installed'))" || echo "✗ viban"
 ```
 
 ### Step 3: Install Missing Dependencies
@@ -92,11 +93,13 @@ sudo dnf install -y gum
 sudo pacman -S --noconfirm zsh jq gum
 ```
 
-### Step 4: Install viban CLI
+### Step 4: Install or Update viban CLI
 
 ```bash
-npm install -g claude-plugin-viban
+npm install -g claude-plugin-viban@latest
 ```
+
+This installs viban if not present, or updates to the latest version if already installed.
 
 ### Step 5: Verify Installation
 
@@ -113,6 +116,7 @@ If successful, show:
 
 All dependencies installed:
   ✓ zsh
+  ✓ python3
   ✓ gum
   ✓ jq
   ✓ viban
@@ -121,8 +125,8 @@ You can now use:
   viban              Open TUI board
   viban add "task"   Add a task
   viban list         List all tasks
-  /assign            Auto-resolve next issue
-  /task              Create structured issue
+  /viban:assign      Auto-resolve next issue
+  /viban:add         Create structured issue
 ```
 
 ### Step 6: Workflow Setup Introduction
