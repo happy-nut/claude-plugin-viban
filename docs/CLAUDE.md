@@ -29,6 +29,16 @@ EOF
 - 스피너 있을 때/없을 때 둘 다 확인
 - 한글 포함 제목 truncation
 
+## Dependency Management
+
+**새 런타임 의존성 추가 시 4곳 모두 업데이트 필수:**
+- `README.md` (Requirements 섹션)
+- `scripts/check-deps.sh` (check_dep 호출)
+- `install.sh` (install_pkg 호출)
+- `skills/setup/SKILL.md` (체크 목록 + 완료 메시지)
+
+릴리스 전 누락 여부 확인할 것.
+
 ## Release Rules
 
 **릴리즈는 사용자가 명시적으로 요청할 때만 수행한다.**
@@ -105,6 +115,64 @@ local title=$(printf '%s' "$issue" | jq -r '.title')
 ```
 
 Violating this rule causes jq parse errors on issues with newlines/tabs in description.
+
+### Coprocess Pattern (FIFO-based)
+
+**zsh `coproc` 사용 금지** - `read -sk1` 키 입력과 충돌. 대신 FIFO + fd 사용.
+
+```bash
+# BAD: coproc interferes with read -sk1
+coproc python3 script.py
+echo "cmd" >&p
+read -r result <&p
+
+# GOOD: explicit FIFOs with file descriptors
+mkfifo "$_in_fifo" "$_out_fifo"
+python3 script.py < "$_in_fifo" > "$_out_fifo" &
+exec 7>"$_in_fifo" 8<"$_out_fifo"
+echo "cmd" >&7
+read -r result <&8
+```
+
+### Variable Declaration in Loops
+
+**`local` 을 루프 안에서 재선언하면 현재 값이 stdout으로 출력됨**
+
+```bash
+# BAD: 2회차부터 _bc의 값이 stdout에 찍힘
+while ...; do
+  local _cc=${#_title} _bc
+done
+
+# GOOD: 루프 밖에서 선언, 안에서 할당만
+local _cc _bc
+while ...; do
+  _cc=${#_title}
+done
+```
+
+### EXIT Trap in Subshells
+
+**`$(...)` 서브셸에서 EXIT trap 이 발동됨** - cleanup 함수에 가드 필요
+
+```bash
+cleanup() {
+    [[ ${ZSH_SUBSHELL:-0} -gt 0 ]] && return
+    # ... actual cleanup
+}
+```
+
+### Parameter Flag Syntax
+
+**`${(@f)var}` 에서 `$` 접두사 불필요**
+
+```bash
+# BAD: bad substitution error
+${(@f)$_COPROC_RESULT}
+
+# GOOD
+${(@f)_COPROC_RESULT}
+```
 
 ### Locale Handling (zsh-specific)
 
