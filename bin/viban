@@ -35,7 +35,7 @@ check_dependencies() {
 }
 
 # Only check dependencies for interactive commands (not help)
-[[ "$1" != "help" && "$1" != "--help" && "$1" != "-h" ]] && check_dependencies
+[[ "$1" != "help" && "$1" != "--help" && "$1" != "-h" && "$1" != "sync" ]] && check_dependencies
 
 # ============================================================
 # Auto-update Check (once per day, cached)
@@ -113,7 +113,7 @@ auto_update_check() {
 
 # Run auto-update for all commands except help/version/update itself
 case "$1" in
-    help|--help|-h|--version|-v|update) ;;
+    help|--help|-h|--version|-v|update|sync) ;;
     *) auto_update_check "$@" ;;
 esac
 
@@ -246,7 +246,7 @@ EOF
 
 # Auto-initialize for commands that need data (not help/init)
 case "$1" in
-    help|--help|-h|--version|-v|update|init) ;;
+    help|--help|-h|--version|-v|update|init|sync) ;;
     *) init_viban_json ;;
 esac
 
@@ -1571,6 +1571,26 @@ cmd_migrate() {
     ' "$VIBAN_JSON"
 }
 
+cmd_sync() {
+    local provider="${VIBAN_SYNC_PROVIDER:-}"
+    # Auto-detect provider from existing sync.json or default to github
+    if [[ -z "$provider" && -f "$VIBAN_DATA_DIR/sync.json" ]]; then
+        provider=$(jq -r '.provider // "github"' "$VIBAN_DATA_DIR/sync.json")
+    fi
+    provider="${provider:-github}"
+
+    local provider_script="$VIBAN_SCRIPT_DIR/scripts/providers/${provider}.sh"
+    if [[ ! -f "$provider_script" ]]; then
+        echo "Error: Unknown sync provider '$provider'"
+        echo "Available: $(ls "$VIBAN_SCRIPT_DIR/scripts/providers/" 2>/dev/null | sed 's/\.sh$//' | tr '\n' ' ')"
+        exit 1
+    fi
+
+    VIBAN_JSON="$VIBAN_JSON" VIBAN_DATA_DIR="$VIBAN_DATA_DIR" \
+    VIBAN_PROVIDER="$provider" VIBAN_SCRIPT_DIR="$VIBAN_SCRIPT_DIR" \
+        bash "$VIBAN_SCRIPT_DIR/scripts/sync.sh" "$@"
+}
+
 main() {
     check_deps
     init_json
@@ -1585,6 +1605,7 @@ main() {
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
         migrate) cmd_migrate;;
+        sync)   shift; cmd_sync "$@";;
         --version|-v)
             # Get version from package.json
             if [[ -f "$VIBAN_SCRIPT_DIR/package.json" ]]; then
@@ -1616,6 +1637,7 @@ main() {
             echo "  viban edit <id>   Edit task in editor"
             echo "  viban get <id>    Get task details (JSON)"
             echo "  viban migrate     Migrate: extract type from title"
+            echo "  viban sync        Sync with external issue tracker (GitHub, etc.)"
             echo "  viban update      Update to latest version (if available)"
             echo ""
             echo "  Priority: P0=CRITICAL, P1=HIGH, P2=MEDIUM, P3=LOW"
