@@ -29,6 +29,14 @@ EOF
 - 스피너 있을 때/없을 때 둘 다 확인
 - 한글 포함 제목 truncation
 
+## Plugin Distribution Rules
+
+**`commands/`와 `skills/` 디렉토리는 npm 패키지에 포함되어 모든 사용자에게 노출됨.**
+
+- 메인테이너 전용 도구(release 등)는 `docs/`에 배치
+- 사용자용 커맨드만 `commands/`, `skills/`에 배치
+- 커맨드/스킬 내 참조는 `/viban:{name}` 형식 사용 (`/assign` ✗, `/viban:assign` ✓)
+
 ## Dependency Management
 
 **새 런타임 의존성 추가 시 4곳 모두 업데이트 필수:**

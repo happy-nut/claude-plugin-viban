@@ -8,3 +8,4 @@ viban.json
 *.swo
 *~
 .omc/
+.viban

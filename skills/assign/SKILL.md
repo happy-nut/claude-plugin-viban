@@ -9,7 +9,7 @@ Workflow: First backlog issue -> Resolve -> PR completion
 
 > **No direct `viban.json` access** - CLI only
 > **No Worktree** - Work directly on branch in main repo
-> **Workflow**: Read CLAUDE.md first, follow project workflow if exists
+> **Workflow**: Read `.viban/workflow.md` first, then CLAUDE.md fallback
 
 ---
 
@@ -17,7 +17,17 @@ Workflow: First backlog issue -> Resolve -> PR completion
 
 ### 0.1 Read Project Workflow (CRITICAL)
 
-Before any work, read the project's CLAUDE.md:
+Before any work, read the project's workflow configuration. Check in priority order:
+
+**Priority 1: `.viban/workflow.md`** (dedicated workflow file)
+
+```bash
+[ -f ".viban/workflow.md" ] && cat ".viban/workflow.md"
+```
+
+**Priority 2: CLAUDE.md** (legacy fallback)
+
+Only if `.viban/workflow.md` does NOT exist:
 
 ```bash
 for path in "./CLAUDE.md" "./.claude/CLAUDE.md" "../CLAUDE.md"; do
@@ -25,12 +35,13 @@ for path in "./CLAUDE.md" "./.claude/CLAUDE.md" "../CLAUDE.md"; do
 done
 ```
 
-Look for:
-- `Issue Resolution Workflow` or `Workflow` section
-- Testing requirements (manual verification, specific tools, etc.)
+Look for: `Issue Resolution Workflow` or `Workflow` section.
+
+**Priority 3: Default workflow** (Phase 1 below)
 
 IMPORTANT:
-- If project has a defined workflow -> MUST follow it exactly
+- If `.viban/workflow.md` exists -> MUST follow it exactly (all phases)
+- Else if CLAUDE.md has a workflow section -> MUST follow it exactly
 - If no workflow found -> Use default workflow (Phase 1 below)
 
 ### 0.2 Git Setup
@@ -68,7 +79,7 @@ If backlog is empty: Notify user and exit
 viban get $ISSUE_ID
 ```
 
-### If Project Workflow Exists (from CLAUDE.md):
+### If Project Workflow Exists (from `.viban/workflow.md` or CLAUDE.md):
 
 Follow the project's exact steps.
 
@@ -193,7 +204,7 @@ After approval: Delete issue from viban TUI
 ## Checklist
 
 ```
-[ ] Read CLAUDE.md for project workflow
+[ ] Read .viban/workflow.md (or CLAUDE.md fallback) for project workflow
 [ ] Working on viban-$ISSUE_ID branch
 [ ] Implementation complete
 [ ] Manual verification passed (using appropriate tools)

@@ -354,6 +354,12 @@ init_json() {
 
 get_next_id() { jq -r '.next_id // (([.issues[].id] | max // 0) + 1)' "$VIBAN_JSON"; }
 
+# Display ID: show external_id if present, otherwise #id
+display_id() { local id="$1" ext_id="${2:-}"; [[ -n "$ext_id" && "$ext_id" != "null" ]] && echo "$ext_id" || echo "#$id"; }
+
+# Get external_id for an issue by internal id
+get_ext_id() { jq -r --argjson id "$1" '.issues[]|select((.id|tonumber)==$id)|.external_id//""' "$VIBAN_JSON"; }
+
 # Calculate effective order for sorting (priority-based virtual order for cards without order)
 # Used internally for fractional indexing calculations
 # Cards with order: use actual order
@@ -403,7 +409,7 @@ add_issue() {
         local today=$(date +"%Y-%m-%d")
         cat > "$tmpfile" <<TEMPLATE
 # ─────────────────────────────────────────────
-# VIBAN Issue #$next_id
+# VIBAN Issue #${next_id}
 # ─────────────────────────────────────────────
 # Title: $title
 # Priority: $priority
@@ -597,10 +603,13 @@ build_column_lines() {
     [[ "$st" == "review" ]] && sort_expr='sort_by(.updated_at) | reverse'
     local issues_data=$(printf '%s' "$json_data" | jq -r --arg s "$st" "
         .issues | map(select(.status==\$s)) | $sort_expr |
-        .[] | \"\\(.id)\t\\(.title)\t\\((.description // \"\") | gsub(\"[\\n\\t\\r]\"; \" \"))\t\\(.priority // \"P3\")\t\\(.type // \"\")\"")
+        .[] | \"\\(.id)\t\\(.title)\t\\((.description // \"\") | gsub(\"[\\n\\t\\r]\"; \" \"))\t\\(.priority // \"P3\")\t\\(.type // \"\")\t\\(.external_id // \"\")\"")
     local count=0
-    # Count lines without subprocess using zsh array splitting
-    [[ -n "$issues_data" ]] && count=${#${(f)issues_data}}
+    # Count total issues (not capped) for overflow indicator
+    if [[ -n "$issues_data" ]]; then
+        local -a _count_arr=("${(f)issues_data}")
+        count=${#_count_arr[@]}
+    fi
 
     # Header centered in column
     local hdr_text="● $label"
@@ -623,14 +632,14 @@ build_column_lines() {
     local border=$(gen_border $card_inner)
 
     # --- Pass 1: Collect card data into arrays ---
-    local -a _ids _titles _descs _priorities _types _title_max_ws _title_pfxs
+    local -a _ids _titles _descs _priorities _types _ext_ids _title_max_ws _title_pfxs
     local _has_nonascii=0
     local _desc_max_w=$((card_inner - 4))
     local _spinner_w=0
     [[ "$st" == "in_progress" ]] && _spinner_w=2
     local _cc _bc _pfx
 
-    while IFS=$'\t' read -r _id _title _desc _priority _type; do
+    while IFS=$'\t' read -r _id _title _desc _priority _type _ext_id; do
         [[ -z "$_id" ]] && continue
         (( ${#_ids} >= CACHED_MAX_TASKS )) && break
         [[ -z "$_priority" || "$_priority" == "null" ]] && _priority="P3"
@@ -638,14 +647,15 @@ build_column_lines() {
         [[ "$_desc" == "null" ]] && _desc=""
 
         _ids+=("$_id"); _titles+=("$_title"); _descs+=("$_desc")
-        _priorities+=("$_priority"); _types+=("$_type")
+        _priorities+=("$_priority"); _types+=("$_type"); _ext_ids+=("$_ext_id")
 
-        # Per-card title width limit
-        _title_max_ws+=($((card_inner - 4 - ${#_id} - _spinner_w - 1)))
+        # Per-card title width limit (use display ID length)
+        local _did; _did=$(display_id "$_id" "$_ext_id")
+        _title_max_ws+=($((card_inner - 4 - ${#_did} - _spinner_w)))
         # Prefix for width calc (X as spinner placeholder - same width 1 as braille chars)
         _pfx="  "
         (( _spinner_w )) && _pfx="  X "
-        _title_pfxs+=("${_pfx}#${_id} ")
+        _title_pfxs+=("${_pfx}${_did} ")
 
         # Check for non-ASCII
         if (( ! _has_nonascii )); then
@@ -711,11 +721,13 @@ build_column_lines() {
         local id="${_ids[$_i]}"
         local priority="${_priorities[$_i]}"
         local issue_type="${_types[$_i]}"
+        local ext_id="${_ext_ids[$_i]}"
+        local did; did=$(display_id "$id" "$ext_id")
 
         # Title line
         local spinner_prefix=""
         [[ "$st" == "in_progress" ]] && spinner_prefix="${SPINNER_FRAMES[$((SPINNER_IDX % ${#SPINNER_FRAMES[@]} + 1))]} "
-        local title_content="  ${spinner_prefix}#${id} ${_short_titles[$_i]}"
+        local title_content="  ${spinner_prefix}${did} ${_short_titles[$_i]}"
         local title_pad=$((card_inner - ${_title_cws[$_i]}))
         (( title_pad < 0 )) && title_pad=0
 
@@ -1158,7 +1170,7 @@ level1_columns() {
                         stty echo 2>/dev/null
                         # Clear footer line and show confirm
                         printf '\033[%d;1H\033[K' "$CACHED_TERM_H"
-                        if gum confirm "Delete #$id?" --affirmative "Yes" --negative "No" \
+                        if gum confirm "Delete $(display_id "$id" "$(get_ext_id "$id")")?" --affirmative "Yes" --negative "No" \
                             --selected.foreground="#000000" --selected.background "${C[accent]}"; then
                             delete_issue "$id"
                             (( card > 0 )) && card=$((card - 1))
@@ -1193,13 +1205,15 @@ edit_issue() {
     local created=$(printf '%s' "$issue" | jq -r '.created_at')
     local priority=$(printf '%s' "$issue" | jq -r '.priority // "P3"')
     local issue_type=$(printf '%s' "$issue" | jq -r '.type // ""')
+    local ext_id=$(printf '%s' "$issue" | jq -r '.external_id // ""')
+    local did; did=$(display_id "$id" "$ext_id")
 
     local tmpfile=$(mktemp)
     local editor="${EDITOR:-${VISUAL:-vim}}"
 
     cat > "$tmpfile" <<TEMPLATE
 # ─────────────────────────────────────────────
-# VIBAN Issue #$id
+# VIBAN Issue $did
 # ─────────────────────────────────────────────
 # Status: ${STATUS_LABEL[$ist]}
 # Created: ${created:0:10}
@@ -1310,7 +1324,7 @@ cmd_list() {
     echo ""
     for st in $VIBAN_STATUSES; do
         gum style --foreground "${STATUS_COLOR[$st]}" --bold "● ${STATUS_LABEL[$st]} ($(count_issues_by_status "$st"))"
-        get_issues_by_status "$st" | jq -r '.[]|"  #\(.id) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end) \(.title)"'
+        get_issues_by_status "$st" | jq -r '.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end) \(.title)"'
         echo ""
     done
 }
@@ -1336,15 +1350,15 @@ cmd_priority() {
         '(.issues[]|select((.id|tonumber)==$id)) |= . + {priority:$priority,updated_at:$now}' \
         "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
 
-    echo "✓ #$id priority → $new_priority"
+    echo "✓ $(display_id "$id" "$(get_ext_id "$id")") priority → $new_priority"
 }
 
 cmd_add() {
     init_json
     [[ -z "$1" ]] && { echo "Usage: viban add \"title\" [\"description\"] [priority] [type] [attachments...]"; exit 1; }
 
-    # Support both positional and named args (--title, --description, --priority, --type)
-    local title="" desc="" priority="P3" issue_type=""
+    # Support both positional and named args (--title, --description, --priority, --type, --ext-id)
+    local title="" desc="" priority="P3" issue_type="" ext_id=""
     local -a attachments=()
     local positional=()
 
@@ -1355,6 +1369,7 @@ cmd_add() {
             --desc-file) [[ -f "$2" ]] && desc="$(cat "$2")"; shift 2 ;;
             --priority)  priority="$2"; shift 2 ;;
             --type)      issue_type="$2"; shift 2 ;;
+            --ext-id|--external-id) ext_id="$2"; shift 2 ;;
             --attach|--attachments) shift; while [[ $# -gt 0 && "$1" != --* ]]; do attachments+=("$1"); shift; done ;;
             --*)         shift 2 2>/dev/null || shift ;; # skip unknown flags
             *)           positional+=("$1"); shift ;;
@@ -1386,7 +1401,7 @@ cmd_add() {
     # Order is only assigned when manually moved
     local tmpjson=$(mktemp)
     printf '%s' "$desc" > "$tmpjson"
-    jq --arg id "$id" --arg title "$title" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --argjson attachments "$attachments_json" --arg now "$now" '
+    jq --arg id "$id" --arg title "$title" --rawfile desc "$tmpjson" --arg priority "$priority" --arg issue_type "$issue_type" --arg ext_id "$ext_id" --argjson attachments "$attachments_json" --arg now "$now" '
         .next_id = ((.next_id // 0) + 1) |
         .issues += [{
             id:($id|tonumber),
@@ -1395,6 +1410,7 @@ cmd_add() {
             status:"backlog",
             priority:$priority,
             type:(if $issue_type == "" then null else $issue_type end),
+            external_id:(if $ext_id == "" then null else $ext_id end),
             attachments:$attachments,
             assigned_to:null,
             created_at:$now,
@@ -1405,7 +1421,7 @@ cmd_add() {
     [[ -n "$issue_type" ]] && type_info=" [$issue_type]"
     local attach_info=""
     [[ ${#attachments[@]} -gt 0 ]] && attach_info=" +${#attachments[@]} files"
-    echo "✓ #$id added ($priority)$type_info$attach_info"
+    echo "✓ $(display_id "$id" "$ext_id") added ($priority)$type_info$attach_info"
 }
 
 cmd_assign() {
@@ -1414,16 +1430,18 @@ cmd_assign() {
     local issue=$(jq -r '.issues|map(select(.status=="backlog"))|sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end)|first' "$VIBAN_JSON")
     [[ "$issue" == "null" || -z "$issue" ]] && { echo "No backlog"; exit 1; }
     local id=$(printf '%s' "$issue" | jq -r '.id') now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local ext_id=$(printf '%s' "$issue" | jq -r '.external_id // ""')
 
     # Update status to in_progress (no worktree - use branch workflow)
     jq --argjson id "$id" --arg s "$session" --arg now "$now" \
         '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"in_progress",assigned_to:$s,updated_at:$now}' \
         "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
 
-    # Set iTerm2 session name to issue number
-    printf '\033]1;#%s\007' "$id"
+    # Set iTerm2 session name to issue display ID
+    local did; did=$(display_id "$id" "$ext_id")
+    printf '\033]1;%s\007' "$did"
 
-    echo "✓ #$id assigned"
+    echo "✓ $did assigned"
     echo "$id"
 }
 
@@ -1439,7 +1457,7 @@ cmd_review() {
     # Clear iTerm2 session name
     printf '\033]1;\007'
 
-    echo "✓ #$id → review"
+    echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → review"
 }
 
 cmd_done() {
@@ -1461,7 +1479,7 @@ cmd_done() {
     # Clear iTerm2 session name
     printf '\033]1;\007'
 
-    echo "✓ #$1 completed & removed"
+    echo "✓ $(display_id "$1" "$(get_ext_id "$1")") completed & removed"
 }
 
 cmd_get() { init_json; jq --argjson id "$1" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON"; }
@@ -1489,7 +1507,7 @@ cmd_attach() {
         }
     ' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
 
-    echo "✓ #$id: ${#files[@]} file(s) attached"
+    echo "✓ $(display_id "$id" "$(get_ext_id "$id")"): ${#files[@]} file(s) attached"
 }
 
 cmd_migrate() {

@@ -1,256 +1,95 @@
 ---
 name: add
-description: "Analyze problem and register as viban issue with evidence"
-enter_plan_mode: true
+description: "Register a problem as a viban issue"
 ---
 
-# /add - Problem Analysis and Issue Registration
+# /add - Register Issue
 
-Analyze problem situation and register as viban issue with file locations and evidence.
+Register a problem as a viban issue. Keep it lightweight — no codebase exploration, no heavy analysis.
 
-> **Core Principle**: Focus on **symptoms and problem definition**, not solutions.
-> Solutions are decided by the assignee after understanding full context.
+> **Principle**: Clarify symptoms only if vague. Don't explore code or propose solutions.
 
-## Interview Phase (Required)
+## Input
 
-**Always start with an interview** to gather complete context before exploring code.
+**User Input**: `$ARGUMENTS`
 
-### Interview Questions
+## Step 1: Clarify (only if needed)
 
-Use AskUserQuestion to ask these questions (can combine related ones):
+If the user's description is **clear enough** to register (who/what/where), skip to Step 2.
 
-**1. Problem Identification**
-```
-What problem are you experiencing?
+If **vague or ambiguous**, concretize with one AskUserQuestion:
 
-- Error message or unexpected behavior
-- What feature/page is affected
-- When did it start happening
-```
+- header: "Problem"
+- question: "Can you describe the symptom more specifically?"
+- options based on context, e.g.:
+  - "Error/crash on specific action"
+  - "Feature not working as expected"
+  - "Performance issue"
+  - "Let me describe"
+- multiSelect: false
 
-**2. Reproduction Context**
-```
-How can this be reproduced?
+Goal: get a **one-sentence symptom** clear enough for an assignee to understand.
 
-- Step-by-step actions
-- Environment (local/staging/production)
-- Frequency (always/sometimes/once)
-```
+## Step 2: Determine Priority & Type
 
-**3. Expected vs Actual**
-```
-What should happen vs what actually happens?
+Infer from the description. Do NOT ask unless truly ambiguous.
 
-- Expected behavior
-- Actual result
-- Any error messages or logs
-```
+| Condition | Priority |
+|-----------|----------|
+| System down, data loss | P0 |
+| Feature broken, errors | P1 |
+| Performance, warnings | P2 |
+| Improvements, refactoring | P3 |
 
-**4. Additional Context** (optional, ask if needed)
-```
-Any additional context?
+| Type | When |
+|------|------|
+| bug | Something is broken |
+| feat | New functionality |
+| chore | Maintenance, config |
+| refactor | Code restructuring |
 
-- Recent changes that might be related
-- Workarounds tried
-- Related issues or features
-```
+## Step 3: Check Workflow for Issue Numbering
 
-### Interview Strategy
-
-- Ask 1-2 questions at a time using AskUserQuestion
-- Provide options when possible for faster responses
-- Stop interviewing when you have enough to:
-  1. Search for relevant code
-  2. Determine priority and type
-  3. Write clear symptoms
-
-## Execution Steps
-
-### Step 1: Problem Identification (from interview)
-
-From the interview responses, extract:
-1. **Symptoms**: Clearly define what the problem is
-2. **Keywords**: Error messages, feature names, module names
-3. **Priority**:
-   | Condition | Priority |
-   |-----------|----------|
-   | System down, data loss | P0 |
-   | Feature broken, errors | P1 |
-   | Performance degradation, warnings | P2 |
-   | Improvements, refactoring | P3 |
-
-### Step 2: Codebase Exploration
-
-**Required**: Must find code location related to the problem
-
-1. **Search by keywords**:
-   ```bash
-   # Search by error message or function name
-   grep -r "keyword" . --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx"
-   ```
-
-2. **Check related files**:
-   - Find module where error occurred
-   - Check stack trace files if available
-   - For API endpoints: trace router → use case → domain
-
-3. **Collect location information**:
-   - File path: relative to project root
-   - Function/class name
-   - Line number (if possible)
-
-### Step 3: Issue Body Composition
-
-Write issue body in this format:
-
-```markdown
-## Symptoms
-One-sentence summary of what happened.
-- Frequency: (if known)
-- Affected features:
-
-## Reproduction Steps
-1. Step-by-step reproduction
-2. ...
-3. Environment: local/staging/production
-
-## Expected Result
-- How it should work normally
-
-## Actual Result
-- The problem that actually occurred
-
-## Stack Trace (if available)
-```
-Error log or stack trace
+```bash
+[ -f ".viban/workflow.md" ] && cat ".viban/workflow.md"
 ```
 
-## Location
-- File: `path/to/file.ext`
-- Function/Class:
-- Line: (if known)
+- If workflow says **Manual** issue numbering → ask user for an external ID (e.g. `PROJ-42`)
+- If workflow says **Auto** or no workflow exists → let viban auto-assign
+- If user provided a specific ID in `$ARGUMENTS` → use it regardless of workflow
 
-## Possible Cause (hypothesis)
-- Estimate which code/condition is causing the problem
-- List items to verify (not solutions)
+## Step 4: Register
 
-## Meta Information
-- Registered: (current timestamp)
-- Reporter: user
-```
-
-### Step 4: Register viban Issue
-
-Write the description body to a temp file using a heredoc, then pass via `--desc-file`:
+Write the description to a temp file, then register:
 
 ```bash
 cat > /tmp/viban-desc.md <<'VIBAN_EOF'
 ## Symptoms
-One-sentence summary...
-
-## Reproduction Steps
-1. ...
-
-## Location
-- File: `path/to/file.ext`
+{concretized one-sentence symptom from Step 1}
+{additional context from user input, if any}
 VIBAN_EOF
 
-viban add "{short_title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type}
+# Auto numbering (default)
+viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type}
+
+# Manual numbering (when workflow specifies manual)
+viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type} --ext-id "{external_id}"
 ```
 
-**Why heredoc?** Using `<<'VIBAN_EOF'` (single-quoted delimiter) prevents shell interpretation of backticks, `$`, parentheses, and other special characters in the description.
+**Why heredoc?** `<<'VIBAN_EOF'` prevents shell interpretation of backticks, `$`, etc.
 
-**Parameters**:
-- `title`: Plain title (no tags) — first positional argument
-- `--desc-file`: Path to file containing issue body (Markdown)
-- `--priority`: P0, P1, P2, P3 (default: P3)
-- `--type`: bug, feat, chore, refactor
-
-**Examples**:
-```bash
-# BUG issue
-cat > /tmp/viban-desc.md <<'VIBAN_EOF'
-## Symptoms
-API responds with 504 after 30 seconds.
-- File: `src/api/handler.ts:42`
-VIBAN_EOF
-viban add "API response timeout" --desc-file /tmp/viban-desc.md --priority P1 --type bug
-
-# FEATURE issue
-cat > /tmp/viban-desc.md <<'VIBAN_EOF'
-## Symptoms
-Users request dark mode support.
-VIBAN_EOF
-viban add "Dark mode support" --desc-file /tmp/viban-desc.md --priority P2 --type feat
-
-# REFACTOR issue
-cat > /tmp/viban-desc.md <<'VIBAN_EOF'
-## Symptoms
-Auth logic is duplicated across 3 modules.
-VIBAN_EOF
-viban add "Separate auth logic" --desc-file /tmp/viban-desc.md --priority P3 --type refactor
-```
-
-### Step 5: Report Results
-
-After registration, report to user:
+## Step 5: Report
 
 ```
-=== viban Issue Registered ===
-- Issue ID: #{id}
-- Title: {title}
-- Type: {type}
-- Priority: {priority}
-- Location: {file_path}:{line}
-- Status: backlog
-
-Next steps:
-- `viban list` to view issue list
-- `viban start {id}` to start working
+Issue #{id} registered
+  Title: {title}
+  Priority: {priority} | Type: {type}
+  Status: backlog
 ```
 
-## Example Interview Flow
+## Notes
 
-**User runs**: `/viban:add`
-
-**Agent**: (AskUserQuestion)
-```
-What problem are you experiencing?
-
-Options:
-- Something is broken/erroring
-- Feature not working as expected
-- Performance issue
-- Need new feature/improvement
-- Other
-```
-
-**User selects**: "Something is broken/erroring"
-
-**Agent**: (AskUserQuestion)
-```
-Please describe the error:
-
-1. What action triggers it?
-2. What error message do you see?
-3. Which page/feature is affected?
-```
-
-**User responds**: "When I click the chart on backtest results, nothing happens. Console shows 'Cannot read property of undefined'"
-
-**Agent**: Now has enough context to:
-1. Search for chart-related code in backtest
-2. Look for the specific error pattern
-3. Register issue with proper details
-
-## Important Notes
-
-- **Interview First**: Always gather context before code exploration
-- **Location Required**: Do not register without file path
-- **Evidence Required**: Do not register based on guesses without code exploration
-- **Avoid Solutions**: Do not write specific solutions (assignee decides)
-- **Check Duplicates**: Check existing issues before registration
-  ```bash
-  viban list
-  ```
-- **Accurate Priority**: P0 only for system-down level, avoid over-estimation
+- **No codebase exploration** — the assignee does that during `/viban:assign`
+- **No solution proposals** — focus on symptoms only
+- **Check duplicates** before registering: `viban list`
+- **Don't over-prioritize** — P0 is system-down only

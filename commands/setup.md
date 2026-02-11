@@ -138,7 +138,7 @@ After dependencies are installed, explain to the user:
 │         Workflow Setup (Optional)                 │
 ╰──────────────────────────────────────────────────╯
 
-/viban:assign uses your project's CLAUDE.md workflow
+/viban:assign uses your project's .viban/workflow.md
 as the TOP PRIORITY when resolving issues.
 
 Without a workflow, a default 4-step process is used.
@@ -150,112 +150,267 @@ Ask the user with AskUserQuestion whether they want to configure a workflow now 
 - **"Configure workflow"** → Continue to Step 7
 - **"Skip"** → End setup
 
-### Step 7: Workflow Interview
+### Step 7: Auto-detect Project Configuration
 
-Use AskUserQuestion for each question. Collect all answers before generating.
+Before interviewing, automatically gather project context. Do NOT ask the user about things you can detect.
 
-**Q1. Project Type**
-- header: "Project"
-- options:
-  - "Web Frontend" (React, Vue, Svelte, etc.)
-  - "Web Backend" (API server, microservice)
-  - "CLI / Library"
-  - "Fullstack" (frontend + backend)
-- multiSelect: false
+**7.1 Detect build/test commands:**
 
-**Q2. Build & Test Command**
-- header: "Build/Test"
-- options:
-  - "`npm run build && npm test`"
-  - "`pnpm build && pnpm test`"
-  - "`pytest`"
-  - "`cargo build && cargo test`"
-- multiSelect: false
-- (User can select "Other" to type a custom command)
+```bash
+# Check package.json scripts
+[ -f package.json ] && cat package.json | jq '.scripts' 2>/dev/null
 
-**Q3. Verification Method**
-- header: "Verify"
-- options:
-  - "Browser test (Playwright / Chrome DevTools)"
-  - "API endpoint test (curl / WebFetch)"
-  - "CLI output check"
-  - "No manual verification (tests are enough)"
-- multiSelect: true
-
-**Q4. Commit Convention**
-- header: "Commits"
-- options:
-  - "Conventional Commits (`feat:`, `fix:`, `chore:`, etc.)"
-  - "Free-form messages"
-- multiSelect: false
-- (User can select "Other" to type a custom convention)
-
-**Q5. Additional Rules (Optional)**
-- Ask with AskUserQuestion:
-  - header: "Rules"
-  - question: "Any additional project-specific rules? (e.g. 'always update CHANGELOG', 'use Korean commit messages')"
-  - options:
-    - "No additional rules"
-    - "Let me type rules"
-  - multiSelect: false
-- If user selects "Let me type rules", collect their free-text input.
-
-### Step 8: Generate CLAUDE.md Workflow
-
-Based on interview answers, generate (or append to) the project root `CLAUDE.md`.
-
-**If CLAUDE.md does not exist**: Create it with the workflow section.
-**If CLAUDE.md exists but has no `## Issue Resolution Workflow`**: Append the section.
-**If CLAUDE.md already has `## Issue Resolution Workflow`**: Ask user whether to overwrite or skip.
-
-Generated template:
-
-```markdown
-## Issue Resolution Workflow
-
-> This workflow is automatically applied when running `/viban:assign`.
-
-### Step 1: Analyze
-- Read issue description via `viban get {id}`
-- Find relevant code files
-- Understand the root cause
-
-### Step 2: Implement
-- Make minimal, focused changes
-- {ADDITIONAL_RULES from Q5, if any}
-
-### Step 3: Verify
-- {VERIFICATION_METHODS from Q3}
-
-### Step 4: Build & Test
-- Run: `{BUILD_TEST_COMMAND from Q2}`
-
-### Step 5: Commit & PR
-- Commit convention: {CONVENTION from Q4}
-- Create PR via `gh pr create`
-
-### Step 6: Complete
-- Run `viban review {id}` to move to human review
+# Check for common build systems
+[ -f Makefile ] && echo "Makefile found"
+[ -f pyproject.toml ] && echo "pyproject.toml found"
+[ -f Cargo.toml ] && echo "Cargo.toml found"
+[ -f go.mod ] && echo "go.mod found"
 ```
 
-**Template variable mapping:**
+Determine the appropriate build/test command from the detected files.
 
-| Variable | Source | Example |
-|----------|--------|---------|
-| `{VERIFICATION_METHODS}` | Q3 answers joined as bullet list | `- Browser test with Playwright` |
-| `{BUILD_TEST_COMMAND}` | Q2 answer | `npm run build && npm test` |
-| `{CONVENTION}` | Q4 answer | `Conventional Commits (feat:, fix:, etc.)` |
-| `{ADDITIONAL_RULES}` | Q5 answer (omit line if empty) | `- Always update CHANGELOG.md` |
+**7.2 Detect existing conventions from git history:**
 
-After writing CLAUDE.md, confirm:
+```bash
+# Recent commit messages to infer commit style
+git log --oneline -20 2>/dev/null
+
+# Branch naming patterns
+git branch -r 2>/dev/null | head -20
+```
+
+**7.3 Detect project type and verification methods:**
+
+Infer from file structure (e.g. `src/components/` = frontend, `routes/` or `controllers/` = backend API, `bin/` = CLI).
+
+Store all detected values internally. These will be used in Step 9 to populate the workflow template without asking the user.
+
+### Step 8: Workflow Interview
+
+Ask only what the agent **cannot infer on its own**. One AskUserQuestion call, 3 questions. Everything else uses smart defaults or auto-detection.
+
+**Q1. Pipeline**
+- header: "Pipeline"
+- question: "After `/viban:assign`, how far should the agent go?"
+- options:
+  - "Full auto — analyze → implement → commit → PR → review"
+  - "Stop before PR — I'll review the diff then create PR myself"
+  - "Stop before commit — I'll review the code before anything ships"
+  - "Plan only — analyze and propose a plan, I'll implement"
+- multiSelect: false
+
+**Q2. Issue Numbering**
+- header: "Issue ID"
+- question: "How should issues be numbered when using `/viban:add`?"
+- options:
+  - "Auto — viban auto-assigns #1, #2, #3..."
+  - "Manual — ask for an external ID each time (e.g. PROJ-42, JIRA-123)"
+- multiSelect: false
+
+**Q3. Extra Rules**
+- header: "Rules"
+- question: "Any additional rules the agent should follow? (e.g. commit conventions, language, CHANGELOG)"
+- options:
+  - "No, auto-detect everything"
+  - "Let me describe"
+- multiSelect: false
+- If user selects "Let me describe", collect free-text.
+
+**Defaults for everything else (do NOT ask):**
+
+| Setting | Default | How to override |
+|---------|---------|-----------------|
+| Commit/PR conventions | Auto-detected from `git log` history | Q3 free-text or edit `.viban/workflow.md` |
+| Analysis depth | Agent decides per issue priority/complexity | Edit `.viban/workflow.md` |
+| Implementation approach | Agent decides per issue type | Edit `.viban/workflow.md` |
+| Quality gates | Build/tests pass + manual verification | Edit `.viban/workflow.md` |
+| Test evidence | Test output logs in PR body | Q3 free-text or edit file |
+| Post-merge | Auto-close issue + delete branch | Edit `.viban/workflow.md` |
+| Verification method | Auto-detected from project type | Edit `.viban/workflow.md` |
+
+### Step 9: Generate `.viban/workflow.md`
+
+#### 9.1 Create `.viban/` directory and update `.gitignore`
+
+```bash
+mkdir -p .viban
+```
+
+Add `.viban` to `.gitignore`:
+- If `.gitignore` exists but does not contain `.viban`: append `.viban` to it
+- If `.gitignore` does not exist: create it with `.viban`
+- If `.gitignore` already contains `.viban`: do nothing
+
+```bash
+if [ -f .gitignore ]; then
+    grep -qxF '.viban' .gitignore || echo '.viban' >> .gitignore
+else
+    echo '.viban' > .gitignore
+fi
+```
+
+#### 9.2 Check for existing workflow
+
+If `.viban/workflow.md` already exists, ask user with AskUserQuestion:
+- "A workflow already exists at `.viban/workflow.md`. What would you like to do?"
+- Options: "Overwrite with new interview results" / "Keep existing workflow"
+- If user chooses to keep: skip generation and end setup.
+
+#### 9.3 Generate workflow file
+
+Combine **auto-detected values** (Step 7) with **interview answers** (Step 8) to write `.viban/workflow.md`.
+
+**Auto-detected values (from Step 7) — do NOT ask user:**
+
+| Value | Detection Source | Example |
+|-------|-----------------|---------|
+| Build/test command | `package.json`, `Makefile`, `Cargo.toml`, etc. | `npm run build && npm test` |
+| Project type | File structure analysis | "Web Frontend (React)" |
+| Verification methods | Inferred from project type | "Browser test (Playwright)" for frontend, "CLI output check" for CLI |
+| Existing commit style | `git log --oneline -20` | Infer convention from history |
+| Branch naming pattern | `git branch -r` | `feat/*`, `fix/*` |
+
+**Interview values (from Step 8) — only 3 questions:**
+
+| Value | Source | Example |
+|-------|--------|---------|
+| Pipeline | Q1 | "Full auto" or "Stop before PR" |
+| Issue numbering | Q2 | "Auto" or "Manual" |
+| Extra rules | Q3 | User-typed rules or "None" |
+
+**Workflow generation principles:**
+- **Q1 (Pipeline) determines the entire automation structure** — which phases run automatically, where to stop, and whether to create PRs. "Full auto" = no stops + auto PR. "Stop before PR" = auto commit + user creates PR. "Stop before commit" = implement only + user reviews. "Plan only" = analyze only.
+- **Q2 (Issue numbering) determines how `/viban:add` handles IDs.** "Auto" = viban auto-assigns `#1`, `#2`. "Manual" = agent asks for an external ID each time and passes `--ext-id` to `viban add`. When manual, commits/PRs reference the external ID instead of `#N`.
+- **Q3 (Extra rules) is appended verbatim to the Additional Rules section.** If user mentions conventions, evidence, CHANGELOG, language, etc., incorporate into the relevant phase.
+- **Commit/PR conventions are auto-detected from git history** (Step 7.2). If the user overrides via Q3, use the user's preference instead.
+- **Everything else uses smart defaults.** Analysis depth, implementation approach, quality gates, verification methods, issue numbering, post-merge — all auto-determined by the agent or set to sensible defaults.
+- Use auto-detected values for operational details (commands, tools, paths).
+- Write the workflow in concrete, actionable language — not vague principles.
+
+**Generated template:**
+
+```markdown
+# Issue Resolution Workflow
+
+> Auto-applied by `/viban:assign`. Generated by `/viban:setup` - edit freely.
+
+## Pipeline
+
+{FROM Q1:}
+{- "Full auto": "Analyze → Implement → Verify → Build → Commit → PR → Review (fully autonomous)"}
+{- "Stop before PR": "Analyze → Implement → Verify → Build → Commit → STOP (user creates PR)"}
+{- "Stop before commit": "Analyze → Implement → STOP (user reviews code, then commits)"}
+{- "Plan only": "Analyze → STOP (user decides next steps)"}
+
+---
+
+## Phase 1: Analyze
+
+The agent determines analysis depth based on issue priority and complexity.
+
+1. Read the issue description via `viban get {id}`
+2. Explore codebase — approach chosen by agent based on issue context
+3. Identify root cause and estimate scope
+
+### Analysis Checklist
+- [ ] Issue description fully understood
+- [ ] Affected code located and read
+- [ ] Root cause identified (or hypothesis formed)
+- [ ] Scope of change estimated
+
+{IF Q1 is "Plan only":}
+### >>> STOP: Present analysis and proposed plan to user. Wait for approval.
+
+---
+
+## Phase 2: Implement
+
+The agent determines implementation approach based on issue type and priority.
+
+### Testing Requirements
+{AUTO_DETECTED from project's test framework}
+
+### Implementation Checklist
+- [ ] Changes are focused on the issue scope
+- [ ] No unrelated changes mixed in
+- [ ] {TESTING_CHECKLIST — based on detected test framework}
+
+{IF Q1 is "Stop before commit":}
+### >>> STOP: Present changes to user. Wait for approval before committing.
+
+---
+
+## Phase 3: Verify
+
+Verify the fix works. Build/tests must pass + manual verification.
+
+### Verification Methods
+{AUTO_DETECTED based on project type}
+
+### Verification Checklist
+- [ ] Fix verified
+- [ ] No regressions in adjacent functionality
+- [ ] Build and tests passing
+
+---
+
+## Phase 4: Build and Test
+
+```bash
+{AUTO_DETECTED build/test command}
+```
+
+If build/test fails: fix errors, return to Phase 3.
+
+---
+
+## Phase 5: Ship
+
+### Commit Convention
+{AUTO_DETECTED from git history — infer format from existing commits. If Q3 overrides, use that instead.}
+
+### Branch Convention
+{AUTO_DETECTED from existing patterns, or `viban-{id}` as default}
+
+### Pull Request
+{FROM Q1:}
+{- "Full auto": create PR with body template, move issue to review via `viban review {id}`}
+{- "Stop before PR": commit and push only, notify user that PR is pending. Run `viban review {id}`.}
+{- "Stop before commit" / "Plan only": N/A — agent already stopped earlier}
+
+### PR Body Template
+{AUTO_DETECTED from git history convention. If Q3 overrides, use that instead.}
+
+### Ship Checklist
+- [ ] Rebased on latest main
+- [ ] All commits follow convention
+- [ ] `viban review {id}` executed
+
+---
+
+## Issue Management
+
+- Issue numbering: {FROM Q2: "Auto" = auto-increment (viban default), "Manual" = ask for external ID via `--ext-id` flag}
+- Test evidence: include test output in PR body
+- Post-merge: auto-close issue (`viban done {id}`), delete branch
+
+---
+
+## Additional Rules
+
+{FROM Q3, or "None"}
+```
+
+After writing `.viban/workflow.md`, confirm:
 
 ```
 ╭──────────────────────────────────────────────────╮
-│     Workflow saved to CLAUDE.md! ✨              │
+│  Workflow saved to .viban/workflow.md! ✨         │
 ╰──────────────────────────────────────────────────╯
 
+.viban/ added to .gitignore
 /viban:assign will now follow your custom workflow.
-You can edit CLAUDE.md anytime to adjust it.
+You can edit .viban/workflow.md anytime to adjust it.
 ```
 
 ---
