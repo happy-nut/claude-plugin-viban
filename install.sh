@@ -4,6 +4,8 @@
 
 set -e
 
+main() {
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -220,3 +222,7 @@ echo -e "  ${YELLOW}viban help${NC}         Show all commands"
 echo ""
 echo -e "In Claude Code, the plugin is now available."
 echo ""
+
+}
+
+main "$@"
