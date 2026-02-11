@@ -637,7 +637,7 @@ build_column_lines() {
     local _desc_max_w=$((card_inner - 4))
     local _spinner_w=0
     [[ "$st" == "in_progress" ]] && _spinner_w=2
-    local _cc _bc _pfx
+    local _cc _bc _pfx _did
 
     while IFS=$'\t' read -r _id _title _desc _priority _type _ext_id; do
         [[ -z "$_id" ]] && continue
@@ -650,7 +650,7 @@ build_column_lines() {
         _priorities+=("$_priority"); _types+=("$_type"); _ext_ids+=("$_ext_id")
 
         # Per-card title width limit (use display ID length)
-        local _did; _did=$(display_id "$_id" "$_ext_id")
+        _did=$(display_id "$_id" "$_ext_id")
         _title_max_ws+=($((card_inner - 4 - ${#_did} - _spinner_w)))
         # Prefix for width calc (X as spinner placeholder - same width 1 as braille chars)
         _pfx="  "
