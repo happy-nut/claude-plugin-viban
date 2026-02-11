@@ -174,39 +174,14 @@ echo ""
 echo -e "${BOLD}Registering Claude Code plugin...${NC}"
 echo ""
 
-CLAUDE_CONFIG_DIR="${HOME}/.claude"
-CLAUDE_PLUGINS_FILE="${CLAUDE_CONFIG_DIR}/plugins.json"
-
-mkdir -p "$CLAUDE_CONFIG_DIR"
-
-# Get npm global prefix to find viban
-NPM_PREFIX=$(npm prefix -g)
-VIBAN_PLUGIN_DIR="${NPM_PREFIX}/lib/node_modules/claude-plugin-viban"
-
-# Check if plugins.json exists
-if [[ -f "$CLAUDE_PLUGINS_FILE" ]]; then
-    # Check if viban is already registered
-    if jq -e '.plugins[] | select(.name == "viban")' "$CLAUDE_PLUGINS_FILE" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓${NC} Plugin already registered"
-    else
-        # Add viban to existing plugins
-        jq --arg path "$VIBAN_PLUGIN_DIR" '.plugins += [{"name": "viban", "path": $path}]' "$CLAUDE_PLUGINS_FILE" > "${CLAUDE_PLUGINS_FILE}.tmp"
-        mv "${CLAUDE_PLUGINS_FILE}.tmp" "$CLAUDE_PLUGINS_FILE"
-        echo -e "${GREEN}✓${NC} Plugin registered"
-    fi
+if command -v claude &> /dev/null; then
+    claude plugin marketplace add https://github.com/happy-nut/claude-plugin-viban 2>/dev/null || true
+    claude plugin install viban 2>/dev/null || true
+    echo -e "${GREEN}✓${NC} Plugin registered in Claude Code"
 else
-    # Create new plugins.json
-    cat > "$CLAUDE_PLUGINS_FILE" << EOF
-{
-  "plugins": [
-    {
-      "name": "viban",
-      "path": "$VIBAN_PLUGIN_DIR"
-    }
-  ]
-}
-EOF
-    echo -e "${GREEN}✓${NC} Plugin registered"
+    echo -e "${YELLOW}!${NC} Claude Code CLI not found. To register the plugin manually, run:"
+    echo -e "  ${YELLOW}claude plugin marketplace add https://github.com/happy-nut/claude-plugin-viban${NC}"
+    echo -e "  ${YELLOW}claude plugin install viban${NC}"
 fi
 
 echo ""
