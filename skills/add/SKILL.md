@@ -5,78 +5,54 @@ description: "Register a problem as a viban issue"
 
 # /add - Register Issue
 
-Register a problem as a viban issue. Keep it lightweight — no codebase exploration, no heavy analysis.
+Register a problem as a viban issue. No codebase exploration, no solutions — symptoms only.
 
-> **Principle**: Clarify symptoms only if vague. Don't explore code or propose solutions.
+**Input**: `$ARGUMENTS`
 
-## Input
+## Step 1: Clarify (only if vague)
 
-**User Input**: `$ARGUMENTS`
+If clear enough (who/what/where), skip to Step 2. Otherwise, one AskUserQuestion:
+- header: "Problem", question: "Can you describe the symptom more specifically?"
+- options: context-appropriate (e.g. "Error/crash", "Feature not working", "Performance issue", "Let me describe")
 
-## Step 1: Clarify (only if needed)
+## Step 2: Priority & Type
 
-If the user's description is **clear enough** to register (who/what/where), skip to Step 2.
+Infer from description. Don't ask unless truly ambiguous.
 
-If **vague or ambiguous**, concretize with one AskUserQuestion:
+| Priority | Condition | Type | When |
+|----------|-----------|------|------|
+| P0 | System down, data loss | bug | Something broken |
+| P1 | Feature broken, errors | feat | New functionality |
+| P2 | Performance, warnings | chore | Maintenance, config |
+| P3 | Improvements, refactoring | refactor | Code restructuring |
 
-- header: "Problem"
-- question: "Can you describe the symptom more specifically?"
-- options based on context, e.g.:
-  - "Error/crash on specific action"
-  - "Feature not working as expected"
-  - "Performance issue"
-  - "Let me describe"
-- multiSelect: false
-
-Goal: get a **one-sentence symptom** clear enough for an assignee to understand.
-
-## Step 2: Determine Priority & Type
-
-Infer from the description. Do NOT ask unless truly ambiguous.
-
-| Condition | Priority |
-|-----------|----------|
-| System down, data loss | P0 |
-| Feature broken, errors | P1 |
-| Performance, warnings | P2 |
-| Improvements, refactoring | P3 |
-
-| Type | When |
-|------|------|
-| bug | Something is broken |
-| feat | New functionality |
-| chore | Maintenance, config |
-| refactor | Code restructuring |
-
-## Step 3: Check Workflow for Issue Numbering
+## Step 3: Issue Numbering
 
 ```bash
 [ -f ".viban/workflow.md" ] && cat ".viban/workflow.md"
 ```
 
-- If workflow says **Manual** issue numbering → ask user for an external ID (e.g. `PROJ-42`)
-- If workflow says **Auto** or no workflow exists → let viban auto-assign
-- If user provided a specific ID in `$ARGUMENTS` → use it regardless of workflow
+- Workflow says **Manual** → ask user for external ID (e.g. `PROJ-42`)
+- **Auto** or no workflow → let viban auto-assign
+- ID in `$ARGUMENTS` → use it regardless
 
 ## Step 4: Register
-
-Write the description to a temp file, then register:
 
 ```bash
 cat > /tmp/viban-desc.md <<'VIBAN_EOF'
 ## Symptoms
-{concretized one-sentence symptom from Step 1}
-{additional context from user input, if any}
+{one-sentence symptom}
+{additional context, if any}
 VIBAN_EOF
 
 # Auto numbering (default)
 viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type}
 
-# Manual numbering (when workflow specifies manual)
+# Manual numbering (when workflow specifies)
 viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type} --ext-id "{external_id}"
 ```
 
-**Why heredoc?** `<<'VIBAN_EOF'` prevents shell interpretation of backticks, `$`, etc.
+Use `<<'VIBAN_EOF'` (quoted) to prevent shell interpretation.
 
 ## Step 5: Report
 
@@ -87,9 +63,38 @@ Issue #{id} registered
   Status: backlog
 ```
 
-## Notes
+## Step 6: Suggest Plan Mode
 
-- **No codebase exploration** — the assignee does that during `/viban:assign`
-- **No solution proposals** — focus on symptoms only
-- **Check duplicates** before registering: `viban list`
-- **Don't over-prioritize** — P0 is system-down only
+**Skip** for trivial issues (typo, one-liner config, simple copy edit).
+**Recommend** for everything else. Use AskUserQuestion:
+
+- header: "Next step", question: "Want to start planning the solution now?"
+- options:
+  - "Plan now (Recommended)" — Enter plan mode to analyze and design a solution
+  - "Later" — Just register, work on it later
+
+**"Plan now"**: `EnterPlanMode` → after approval, save to `.viban/plans/{issue-id}.md`:
+
+```bash
+mkdir -p .viban/plans
+```
+
+```markdown
+# Plan: {issue title}
+> Issue #{id} | {priority} | {type} | Created: {timestamp}
+
+{full plan content}
+```
+
+Report: `Plan saved to .viban/plans/{issue-id}.md — /viban:assign will auto-load it.`
+
+**"Later"**: end skill.
+
+> **Bias towards planning.** When in doubt, suggest plan mode.
+
+## Rules
+
+- No codebase exploration — assignee does that in `/viban:assign`
+- No solution proposals — symptoms only
+- Check duplicates first: `viban list`
+- P0 is system-down only

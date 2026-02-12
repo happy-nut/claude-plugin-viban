@@ -17,7 +17,7 @@ Sync the viban board with an external issue tracker. Currently supports GitHub I
 
 ```bash
 # Check if sync is already configured
-if [ -f "$(git rev-parse --git-common-dir 2>/dev/null || echo .viban)/sync.json" ]; then
+if [ -f ".viban/sync.json" ]; then
     echo "Sync configured"
     viban sync --status
 else

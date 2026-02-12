@@ -121,6 +121,8 @@ IN_TUI=false
 cleanup() {
     # Skip cleanup in subshells — EXIT trap fires in $() command substitutions
     [[ ${ZSH_SUBSHELL:-0} -gt 0 ]] && return
+    # Kill background sync if running
+    [[ -n "${_sync_pid:-}" ]] && kill "$_sync_pid" 2>/dev/null && wait "$_sync_pid" 2>/dev/null
     _stop_coproc
     printf '\033[?25h\033[0m'
     stty echo 2>/dev/null
@@ -193,24 +195,14 @@ export TERM=${TERM:-xterm-256color}
 # ============================================================
 # Priority:
 # 1. VIBAN_DATA_DIR env var (explicit override)
-# 2. Git common dir (shared across worktrees)
-# 3. Project root .viban/ directory (non-git projects)
+# 2. Project root .viban/ directory
 
 VIBAN_DATA_DIR="${VIBAN_DATA_DIR:-}"
 VIBAN_IS_GIT_REPO=false
+git rev-parse --git-dir &>/dev/null && VIBAN_IS_GIT_REPO=true
 
 if [[ -z "$VIBAN_DATA_DIR" ]]; then
-    # Try git common dir first (shared across worktrees)
-    if _git_common="$(git rev-parse --git-common-dir 2>/dev/null)"; then
-        VIBAN_IS_GIT_REPO=true
-        if [[ -d "$_git_common" ]]; then
-            VIBAN_DATA_DIR="$(cd "$_git_common" && pwd)"
-        fi
-    fi
-    # Fallback: project root .viban directory
-    if [[ -z "$VIBAN_DATA_DIR" ]]; then
-        VIBAN_DATA_DIR="${PWD}/.viban"
-    fi
+    VIBAN_DATA_DIR="${PWD}/.viban"
 fi
 
 VIBAN_JSON="${VIBAN_DATA_DIR}/viban.json"
@@ -218,13 +210,16 @@ VIBAN_JSON="${VIBAN_DATA_DIR}/viban.json"
 # Ensure data directory exists
 mkdir -p "$VIBAN_DATA_DIR"
 
-# Auto-migrate: .viban/viban.json -> .git/ when git repo is initialized
-if $VIBAN_IS_GIT_REPO; then
-    _legacy_json="${PWD}/.viban/viban.json"
-    if [[ -f "$_legacy_json" && ! -f "$VIBAN_JSON" ]]; then
-        mv "$_legacy_json" "$VIBAN_JSON"
-        rmdir "${PWD}/.viban" 2>/dev/null
-        echo "✓ Migrated viban data from .viban/ to git directory"
+# Auto-migrate: .git/viban.json -> .viban/ (legacy location)
+if _git_common="$(git rev-parse --git-common-dir 2>/dev/null)"; then
+    _git_dir="$(cd "$_git_common" && pwd)"
+    if [[ -f "${_git_dir}/viban.json" && ! -f "$VIBAN_JSON" ]]; then
+        mv "${_git_dir}/viban.json" "$VIBAN_JSON"
+        echo "✓ Migrated viban.json from .git/ to .viban/"
+    fi
+    if [[ -f "${_git_dir}/sync.json" && ! -f "${VIBAN_DATA_DIR}/sync.json" ]]; then
+        mv "${_git_dir}/sync.json" "${VIBAN_DATA_DIR}/sync.json"
+        echo "✓ Migrated sync.json from .git/ to .viban/"
     fi
 fi
 
@@ -1051,7 +1046,17 @@ delete_issue() {
     local id=$1
     local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
     local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
+
+    # Determine branch name: prefer issue-{num} when external_id present
     local branch="viban-$id"
+    local _ext_id=$(get_ext_id "$id")
+    if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
+        local _issue_num="${_ext_id##*:}"
+        if git -C "$repo_root" rev-parse --verify "issue-${_issue_num}" &>/dev/null 2>&1; then
+            branch="issue-${_issue_num}"
+        fi
+    fi
+
     if [[ -d "$wt_dir" ]]; then
         git -C "$repo_root" worktree remove "$wt_dir" --force 2>/dev/null
         git -C "$repo_root" branch -D "$branch" 2>/dev/null
@@ -1065,6 +1070,11 @@ level1_columns() {
     _start_coproc
     local col=0 card=0
 
+    # Auto-sync state (120 iterations × 0.5s timeout = ~60s interval)
+    local _sync_counter=0
+    local _SYNC_INTERVAL=120
+    local _sync_pid=""
+
     # Hide cursor and disable input echo
     stty -echo 2>/dev/null
     printf '\033[?25l\033[2J\033[H'
@@ -1073,6 +1083,27 @@ level1_columns() {
     update_term_cache
 
     while true; do
+        # Auto-sync: reap finished background sync
+        if [[ -n "$_sync_pid" ]]; then
+            if ! kill -0 "$_sync_pid" 2>/dev/null; then
+                wait "$_sync_pid" 2>/dev/null
+                _sync_pid=""
+            fi
+        fi
+
+        # Auto-sync: trigger when interval reached and sync configured
+        ((_sync_counter++)) || true
+        if (( _sync_counter >= _SYNC_INTERVAL )) && [[ -z "$_sync_pid" && -f "$VIBAN_DATA_DIR/sync.json" ]]; then
+            _sync_counter=0
+            local _sync_provider
+            _sync_provider=$(jq -r '.provider // ""' "$VIBAN_DATA_DIR/sync.json" 2>/dev/null)
+            if [[ -n "$_sync_provider" && "$_sync_provider" != "null" ]]; then
+                VIBAN_JSON="$VIBAN_JSON" VIBAN_DATA_DIR="$VIBAN_DATA_DIR" \
+                    VIBAN_PROVIDER="$_sync_provider" VIBAN_SCRIPT_DIR="$VIBAN_SCRIPT_DIR" \
+                    bash "$VIBAN_SCRIPT_DIR/scripts/sync.sh" --auto &
+                _sync_pid=$!
+            fi
+        fi
         # Cache JSON data once per frame
         local json_data=$(cat "$VIBAN_JSON")
 
@@ -1424,6 +1455,20 @@ cmd_add() {
             updated_at:$now
         }]' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
     rm -f "$tmpjson"
+
+    # Auto-create remote issue if sync is configured and no ext_id provided
+    if [[ -z "$ext_id" && -f "$VIBAN_DATA_DIR/sync.json" ]]; then
+        local provider
+        provider=$(jq -r '.provider // ""' "$VIBAN_DATA_DIR/sync.json" 2>/dev/null)
+        if [[ -n "$provider" && "$provider" != "null" ]]; then
+            local created_ext_id
+            created_ext_id=$(VIBAN_JSON="$VIBAN_JSON" VIBAN_DATA_DIR="$VIBAN_DATA_DIR" \
+                VIBAN_PROVIDER="$provider" VIBAN_SCRIPT_DIR="$VIBAN_SCRIPT_DIR" \
+                bash "$VIBAN_SCRIPT_DIR/scripts/sync_create.sh" "$id" 2>/dev/null) || true
+            [[ -n "$created_ext_id" ]] && ext_id="$created_ext_id"
+        fi
+    fi
+
     local type_info=""
     [[ -n "$issue_type" ]] && type_info=" [$issue_type]"
     local attach_info=""
@@ -1473,7 +1518,17 @@ cmd_done() {
     # Cleanup worktree if exists
     local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
     local wt_dir="$VIBAN_DATA_DIR/worktrees/$1"
+
+    # Determine branch name: prefer issue-{num} when external_id present
     local branch="viban-$1"
+    local _ext_id=$(get_ext_id "$1")
+    if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
+        local _issue_num="${_ext_id##*:}"
+        if git -C "$repo_root" rev-parse --verify "issue-${_issue_num}" &>/dev/null 2>&1; then
+            branch="issue-${_issue_num}"
+        fi
+    fi
+
     if [[ -d "$wt_dir" ]]; then
         git -C "$repo_root" worktree remove "$wt_dir" --force 2>/dev/null
         git -C "$repo_root" branch -D "$branch" 2>/dev/null
