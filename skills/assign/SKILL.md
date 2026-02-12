@@ -5,71 +5,64 @@ description: "Assign and resolve first backlog issue from viban board through to
 
 # /assign
 
-Workflow: First backlog issue -> Resolve -> PR completion
+First backlog issue → Resolve → PR completion
 
-> **No direct `viban.json` access** - CLI only
-> **No Worktree** - Work directly on branch in main repo
-> **Workflow**: Read `.viban/workflow.md` first, then CLAUDE.md fallback
+> **CLI only** (no direct viban.json access) | **No worktree** (branch in main repo)
 
 ---
 
-## Phase 0: CONTEXT & SETUP
+## Phase 0: SETUP
 
-### 0.1 Read Project Workflow (CRITICAL)
+### 0.1 Read Workflow (CRITICAL)
 
-Before any work, read the project's workflow configuration. Check in priority order:
+Check in priority order — first match wins, follow it exactly:
 
-**Priority 1: `.viban/workflow.md`** (dedicated workflow file)
-
-```bash
-[ -f ".viban/workflow.md" ] && cat ".viban/workflow.md"
-```
-
-**Priority 2: CLAUDE.md** (legacy fallback)
-
-Only if `.viban/workflow.md` does NOT exist:
-
+1. `.viban/workflow.md` → `[ -f ".viban/workflow.md" ] && cat ".viban/workflow.md"`
+2. CLAUDE.md (legacy, only if no workflow.md):
 ```bash
 for path in "./CLAUDE.md" "./.claude/CLAUDE.md" "../CLAUDE.md"; do
     [ -f "$path" ] && cat "$path"
 done
 ```
+Look for `Issue Resolution Workflow` or `Workflow` section.
+3. Default workflow (Phase 1 below)
 
-Look for: `Issue Resolution Workflow` or `Workflow` section.
-
-**Priority 3: Default workflow** (Phase 1 below)
-
-IMPORTANT:
-- If `.viban/workflow.md` exists -> MUST follow it exactly (all phases)
-- Else if CLAUDE.md has a workflow section -> MUST follow it exactly
-- If no workflow found -> Use default workflow (Phase 1 below)
-
-### 0.2 Git Setup
+### 0.2 Git Setup & Assign
 
 ```bash
-# 1. Check for uncommitted changes
-if [ -n "$(git status --porcelain)" ]; then
-    echo "Warning: Uncommitted changes detected"
-    # Ask user whether to commit (use AskUserQuestion)
-fi
+# Check uncommitted changes → AskUserQuestion if dirty
+[ -n "$(git status --porcelain)" ] && echo "Warning: Uncommitted changes"
 
-# 2. Switch to main branch and sync
-git checkout main
-git fetch origin main
-git reset --hard origin/main
+git checkout main && git fetch origin main && git reset --hard origin/main
 
-# 3. Assign issue
 ISSUE_ID=$(viban assign 2>&1 | tail -1)
-if [ -z "$ISSUE_ID" ] || [ "$ISSUE_ID" = "No backlog" ]; then
-    echo "No issues in backlog"
-    exit 0
-fi
-
-# 4. Create new branch
-git checkout -b viban-$ISSUE_ID
+[[ -z "$ISSUE_ID" || "$ISSUE_ID" == "No backlog" ]] && echo "No issues in backlog" && exit 0
 ```
 
-If backlog is empty: Notify user and exit
+### 0.3 Detect Sync & Create Branch
+
+```bash
+ISSUE_JSON=$(viban get $ISSUE_ID)
+EXT_ID=$(echo "$ISSUE_JSON" | jq -r '.external_id // ""')
+SYNC_ACTIVE=false; EXTERNAL_NUM=""
+
+if [ -n "$EXT_ID" ] && [ "$EXT_ID" != "null" ]; then
+    SYNC_ACTIVE=true
+    EXTERNAL_NUM="${EXT_ID##*:}"  # "github:42" -> "42"
+    TITLE=$(echo "$ISSUE_JSON" | jq -r '.title' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | head -c 40)
+    git checkout -b "issue-${EXTERNAL_NUM}-${TITLE}"
+else
+    git checkout -b issue-$ISSUE_ID
+fi
+```
+
+### 0.4 Load Plan (if available)
+
+```bash
+[ -f ".viban/plans/${ISSUE_ID}.md" ] && cat ".viban/plans/${ISSUE_ID}.md"
+```
+
+If plan exists: use as primary guide for Phase 1, skip redundant analysis, but verify plan is still current.
 
 ---
 
@@ -79,102 +72,105 @@ If backlog is empty: Notify user and exit
 viban get $ISSUE_ID
 ```
 
-### If Project Workflow Exists (from `.viban/workflow.md` or CLAUDE.md):
-
-Follow the project's exact steps.
-
-### Default Workflow (if no project workflow):
-
-1. **Understand**: Read the issue, understand the problem
-2. **Locate**: Find relevant code files
-3. **Analyze**: Determine root cause
-4. **Implement**: Make minimal, focused changes
+**With project workflow**: follow its exact steps.
+**Default** (no workflow): Understand → Locate → Analyze root cause → Implement minimal changes.
 
 ---
 
 ## Phase 2: VERIFY
 
-Manual verification using available tools. Do NOT run build/test here - save that for Phase 3.
+Manual verification — do NOT run build/test here (Phase 3).
 
-### Verification Methods (use what's appropriate):
+| Type | Tool |
+|------|------|
+| Web UI | Playwright MCP (`browser_navigate`, `browser_snapshot`, `browser_click`) |
+| API | WebFetch |
+| CLI | Bash |
+| Visual | Read (screenshot files) |
+| Browser | Chrome DevTools MCP |
 
-| Type | Tool | Usage |
-|------|------|-------|
-| Web UI | Playwright MCP | `browser_navigate`, `browser_snapshot`, `browser_click` |
-| API | WebFetch | Fetch endpoints, check responses |
-| CLI | Bash | Run the CLI command, check output |
-| Visual | Read | Read screenshot files if provided |
-| Browser | Chrome DevTools MCP | `take_snapshot`, `navigate_page`, `click` |
+Steps: identify what proves the fix → execute → confirm behavior → document evidence.
 
-### Verification Steps:
+Examples:
+- Web feature: navigate to page, take snapshot, verify element exists
+- API fix: fetch endpoint, check response status and body
+- CLI change: run command, verify output format
+- UI bug: navigate, interact, confirm no error
 
-1. **Identify verification target**: What proves this fix works?
-2. **Execute verification**: Use appropriate tool from above
-3. **Confirm result**: Does the actual behavior match expected?
-4. **Document evidence**: Note what was verified and how
-
-Example verifications:
-- Web feature: Navigate to page, take snapshot, verify element exists
-- API fix: Fetch endpoint, check response status and body
-- CLI change: Run command, verify output format
-- UI bug: Navigate, interact, confirm no error
-
-If verification fails: Return to Phase 1, fix the issue, re-verify.
+If verification fails: return to Phase 1.
 
 ---
 
 ## Phase 3: SHIP
 
-### 3.1 Run Build & Tests
+### 3.1 Build & Test
 
-```bash
-# Run project's build/test commands
-# Example: npm run build && npm test
-# Example: pytest
-# Example: cargo build && cargo test
-```
-
-If build/test fails: Fix errors, return to Phase 2 for re-verification.
+Run project's build/test commands. If fail: fix → return to Phase 2.
 
 ### 3.2 Rebase
 
 ```bash
-git fetch origin main
-git rebase origin/main
+git fetch origin main && git rebase origin/main
 # On conflict: resolve -> git add -> git rebase --continue
 ```
 
 ### 3.3 Commit & Push
 
 ```bash
+BRANCH=$(git branch --show-current)
 git add -A
-git commit -m "fix: issue title summary
+
+# Sync mode: "Closes #NUM" | Default: "Resolves: viban-ID"
+if [ "$SYNC_ACTIVE" = true ]; then
+    git commit -m "fix: issue title summary
 
 - Root cause: ...
 - Solution: ...
 
-Resolves: viban-$ISSUE_ID"
+Closes #$EXTERNAL_NUM"
+else
+    git commit -m "fix: issue title summary
 
-git push -u origin viban-$ISSUE_ID
+- Root cause: ...
+- Solution: ...
+
+Resolves: #$ISSUE_ID"
+fi
+
+git push -u origin "$BRANCH"
 ```
 
 ### 3.4 Create PR
 
 ```bash
-EXISTING_PR=$(gh pr list --head viban-$ISSUE_ID --json number -q '.[0].number')
-[ -z "$EXISTING_PR" ] && gh pr create \
-    --title "viban-$ISSUE_ID: title" \
-    --body "## Changes
+EXISTING_PR=$(gh pr list --head "$BRANCH" --json number -q '.[0].number')
+
+if [ -z "$EXISTING_PR" ]; then
+    if [ "$SYNC_ACTIVE" = true ]; then
+        gh pr create --title "fix: title" \
+            --body "## Changes
+- ...
+
+Closes #$EXTERNAL_NUM
+
+## Verification
+- [ ] Manual verification completed
+- [ ] Build passing
+- [ ] Tests passing (if applicable)" --base main
+    else
+        gh pr create --title "fix: title" \
+            --body "## Changes
 - ...
 
 ## Verification
 - [ ] Manual verification completed
 - [ ] Build passing
-- [ ] Tests passing (if applicable)" \
-    --base main
+- [ ] Tests passing (if applicable)" --base main
+    fi
+fi
 ```
 
-### 3.5 Issue -> review
+### 3.5 Move to Review
 
 ```bash
 viban review $ISSUE_ID
@@ -185,18 +181,9 @@ viban review $ISSUE_ID
 ## Phase 4: HANDOFF
 
 ```
-Human Review Required
-
-Issue #$ISSUE_ID -> review status
-
-PR: gh pr view viban-$ISSUE_ID --web
-
-Verification complete:
-   - Manual verification done with available tools
-   - Build passing
-   - Project workflow followed
-
-After approval: Delete issue from viban TUI
+Issue #$ISSUE_ID → review | PR: gh pr view --web
+Verification: manual + build + workflow followed
+After approval: delete issue from viban TUI
 ```
 
 ---
@@ -205,7 +192,7 @@ After approval: Delete issue from viban TUI
 
 ```
 [ ] Read .viban/workflow.md (or CLAUDE.md fallback) for project workflow
-[ ] Working on viban-$ISSUE_ID branch
+[ ] Working on issue-$ISSUE_ID branch
 [ ] Implementation complete
 [ ] Manual verification passed (using appropriate tools)
 [ ] Build & tests passing
@@ -218,13 +205,7 @@ After approval: Delete issue from viban TUI
 
 ## CRITICAL: Status Transition Rule
 
-> **NEVER end this skill with the issue still in `in_progress`.**
->
-> Before exiting — whether you completed all phases or stopped early due to errors:
-> ```bash
-> viban review $ISSUE_ID
-> ```
-> This is MANDATORY. If you skip this, the board becomes stale and misleading.
+> **NEVER exit with issue still in `in_progress`.** Always run `viban review $ISSUE_ID` before exiting — whether completed or stopped early.
 
 ## CLI Reference
 

@@ -285,12 +285,11 @@ viban help              # Show help
 
 ### Data Location
 
-Issues are stored in `viban.json` at the git common directory:
+Issues are stored in `viban.json` in the `.viban/` directory:
 
 ```bash
-# Find viban.json
-git rev-parse --git-common-dir
-# → .git/viban.json (or ../../.git/viban.json in worktrees)
+# Default location
+.viban/viban.json
 ```
 
 **Custom location:**

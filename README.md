@@ -53,6 +53,7 @@ This separation keeps your workflow clean and prevents context switching.
 - python3 (macOS/Linux built-in)
 - [gum](https://github.com/charmbracelet/gum)
 - [jq](https://jqlang.github.io/jq/)
+- [gh](https://cli.github.com/) (optional, for GitHub Issues sync)
 
 > **Tip:** If using Claude Code, run `/viban:setup` to install all dependencies automatically.
 
@@ -122,6 +123,7 @@ viban assign [session-id]               # Assign top backlog issue
 viban review [id]                       # Move issue to review
 viban done <id>                         # Mark issue as done
 viban get <id>                          # Get issue details (JSON)
+viban sync                              # Sync with external tracker
 viban help                              # Show help message
 ```
 
@@ -175,6 +177,60 @@ Analyzes a problem and creates a properly structured viban issue:
 - Feature requests
 - Converting free-form descriptions to structured issues
 
+#### `/viban:sync` - Sync with external tracker
+
+Two-way sync between your viban board and an external issue tracker (currently GitHub Issues):
+
+1. Checks sync configuration (or initializes on first run)
+2. Shows a dry-run preview of changes
+3. Asks for confirmation before syncing
+4. Reports sync results
+
+**Use cases:**
+- Importing GitHub Issues into your local board
+- Keeping remote issues in sync with local status changes
+- Team collaboration where some members use GitHub and others use viban
+
+## External Tracker Sync
+
+viban can sync two-way with external issue trackers. Currently supported: **GitHub Issues**.
+
+### Quick Start
+
+```bash
+# First time: initialize sync (auto-detects provider from git remote)
+viban sync --init
+
+# Preview what will change
+viban sync --dry-run
+
+# Run sync
+viban sync
+```
+
+> If using Claude Code, run `/viban:sync` for a guided experience with dry-run preview and confirmation.
+
+### How It Works
+
+- **First sync** imports all open remote issues as backlog cards with external IDs (e.g. `github:42`)
+- **Subsequent syncs** pull remote changes and push local status updates
+- **New local cards** are NOT pushed unless `--push-new` is specified (local-first default)
+- **Conflicts** (both sides changed) resolve to remote-wins by default
+
+### Status-to-Label Mapping
+
+| viban status | GitHub label |
+|-------------|-------------|
+| `backlog` | *(no label)* |
+| `in_progress` | `in-progress` |
+| `review` | `review` |
+| `done` | *(issue closed)* |
+
+### Requirements
+
+- [gh CLI](https://cli.github.com/) installed and authenticated (`gh auth login`)
+- Repository must have a GitHub remote
+
 ## Configuration
 
 ### Data Location (viban.json)
@@ -184,18 +240,14 @@ viban stores issues in `viban.json` with the following priority:
 | Priority | Location | When Used |
 |----------|----------|-----------|
 | 1 | `$VIBAN_DATA_DIR` | Explicit override via environment variable |
-| 2 | `.git/` (git common dir) | In a git repository (shared across worktrees) |
-| 3 | `.viban/` | Non-git directories (fallback) |
+| 2 | `.viban/` | Default (all projects) |
 
-**Why Git Common Dir?**
-- Shared across git worktrees (parallel work sessions)
-- Survives branch switches
-- Single source of truth for the repository
+**Auto-Migration:** If viban detects `viban.json` or `sync.json` in `.git/` (legacy location), it automatically moves them to `.viban/`.
 
-**For Non-Git Projects:**
+**For Any Project:**
 ```bash
 # viban will automatically create .viban/viban.json in current directory
-cd /path/to/non-git-project
+cd /path/to/project
 viban add "First issue" "Description" P2 feat
 # Creates: /path/to/non-git-project/.viban/viban.json
 ```
@@ -289,13 +341,22 @@ claude-plugin-viban/
 │   └── viban                # Main TUI/CLI script
 ├── docs/
 │   └── CLAUDE.md            # Claude Code integration guide
+├── commands/
+│   └── sync.md              # /viban:sync command
 ├── scripts/
 │   ├── check-deps.sh        # Dependency checker
+│   ├── sync.sh              # Core sync engine (provider-agnostic)
+│   ├── providers/
+│   │   └── github.sh        # GitHub Issues provider
 │   └── tui_coprocess.py     # Persistent Python coprocess for TUI rendering
 ├── skills/
 │   ├── assign/SKILL.md      # /viban:assign skill
 │   ├── setup/SKILL.md       # /viban:setup skill
+│   ├── sync/SKILL.md        # /viban:sync skill
 │   └── task/SKILL.md        # /viban:task skill
+├── tests/
+│   ├── run_all.zsh          # Test runner
+│   └── test_sync.zsh        # Sync engine tests
 ├── LICENSE                  # MIT License
 ├── package.json             # NPM package config
 └── README.md                # This file

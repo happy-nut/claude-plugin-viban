@@ -94,13 +94,21 @@ sudo dnf install -y gum
 sudo pacman -S --noconfirm zsh jq gum
 ```
 
-### Step 4: Install or Update viban CLI
+### Step 4: Install or Update viban CLI + Auto-detect (Parallel)
+
+Run dependency installation in the **background** while auto-detecting project configuration **in parallel**:
+
+**Background task (install):**
 
 ```bash
 npm install -g claude-plugin-viban@latest
 ```
 
-This installs viban if not present, or updates to the latest version if already installed.
+**Parallel task (auto-detect) — run simultaneously:**
+
+Jump to Step 7 (Auto-detect Project Configuration) and start gathering project context while installation proceeds.
+
+Wait for both tasks to complete before continuing to Step 5.
 
 ### Step 5: Verify Installation
 
@@ -128,21 +136,25 @@ You can now use:
   viban list         List all tasks
   /viban:assign      Auto-resolve next issue
   /viban:add         Create structured issue
+
+Tip: Use /viban:sync to integrate with GitHub Issues.
+     Run it anytime to set up two-way sync.
 ```
 
 ### Step 6: Workflow Setup Introduction
 
-After dependencies are installed, explain to the user:
+After dependencies are installed and auto-detection is complete, explain to the user:
 
 ```
 ╭──────────────────────────────────────────────────╮
-│         Workflow Setup (Optional)                 │
+│         Workflow Setup (Optional)                │
 ╰──────────────────────────────────────────────────╯
 
 /viban:assign uses your project's .viban/workflow.md
 as the TOP PRIORITY when resolving issues.
 
-Without a workflow, a default 4-step process is used.
+Without a workflow, a default process is used:
+analyze → implement → verify → ship.
 Let's set up a custom workflow for this project now.
 ```
 
@@ -194,10 +206,9 @@ Ask only what the agent **cannot infer on its own**. One AskUserQuestion call, 3
 - header: "Pipeline"
 - question: "After `/viban:assign`, how far should the agent go?"
 - options:
-  - "Full auto — analyze → implement → commit → PR → review"
-  - "Stop before PR — I'll review the diff then create PR myself"
-  - "Stop before commit — I'll review the code before anything ships"
-  - "Plan only — analyze and propose a plan, I'll implement"
+  - "Full auto — analyze → implement → commit → PR (review in PR)"
+  - "Stop before PR — I'll review the diff first (review in terminal/IDE)"
+  - "Stop before commit — I'll review the code first (review in terminal/IDE)"
 - multiSelect: false
 
 **Q2. Issue Numbering**
@@ -205,17 +216,32 @@ Ask only what the agent **cannot infer on its own**. One AskUserQuestion call, 3
 - question: "How should issues be numbered when using `/viban:add`?"
 - options:
   - "Auto — viban auto-assigns #1, #2, #3..."
+  - "Sync with provider — use `/viban:sync` to import from GitHub, Jira, Linear, etc."
   - "Manual — ask for an external ID each time (e.g. PROJ-42, JIRA-123)"
 - multiSelect: false
+- If user selects "Sync with provider", run `/viban:sync` to initialize sync after workflow setup completes.
 
 **Q3. Extra Rules**
+
+Before asking, show the user what was auto-detected from Step 7:
+
+```
+Detected conventions:
+  Commit style:  {e.g. "feat: ...", "fix: ..." (Conventional Commits)}
+  Branch naming: {e.g. "feat/*", "fix/*"}
+  Build command: {e.g. "npm run build && npm test"}
+  Project type:  {e.g. "CLI tool (zsh)"}
+```
+
+Then ask:
+
 - header: "Rules"
-- question: "Any additional rules the agent should follow? (e.g. commit conventions, language, CHANGELOG)"
+- question: "Anything to change or add to the detected conventions above?"
 - options:
-  - "No, auto-detect everything"
-  - "Let me describe"
+  - "Looks good, use as-is"
+  - "Let me adjust"
 - multiSelect: false
-- If user selects "Let me describe", collect free-text.
+- If user selects "Let me adjust", collect free-text.
 
 **Defaults for everything else (do NOT ask):**
 
@@ -280,8 +306,8 @@ Combine **auto-detected values** (Step 7) with **interview answers** (Step 8) to
 | Extra rules | Q3 | User-typed rules or "None" |
 
 **Workflow generation principles:**
-- **Q1 (Pipeline) determines the entire automation structure** — which phases run automatically, where to stop, and whether to create PRs. "Full auto" = no stops + auto PR. "Stop before PR" = auto commit + user creates PR. "Stop before commit" = implement only + user reviews. "Plan only" = analyze only.
-- **Q2 (Issue numbering) determines how `/viban:add` handles IDs.** "Auto" = viban auto-assigns `#1`, `#2`. "Manual" = agent asks for an external ID each time and passes `--ext-id` to `viban add`. When manual, commits/PRs reference the external ID instead of `#N`.
+- **Q1 (Pipeline) determines the entire automation structure** — which phases run automatically, where to stop, and whether to create PRs. "Full auto" = no stops + auto PR. "Stop before PR" = auto commit + user creates PR. "Stop before commit" = implement only + user reviews.
+- **Q2 (Issue numbering) determines how `/viban:add` handles IDs.** "Auto" = viban auto-assigns `#1`, `#2`. "Sync with provider" = use `/viban:sync` to import/sync issues from GitHub, Jira, Linear, etc. "Manual" = agent asks for an external ID each time and passes `--ext-id` to `viban add`. When manual, commits/PRs reference the external ID instead of `#N`.
 - **Q3 (Extra rules) is appended verbatim to the Additional Rules section.** If user mentions conventions, evidence, CHANGELOG, language, etc., incorporate into the relevant phase.
 - **Commit/PR conventions are auto-detected from git history** (Step 7.2). If the user overrides via Q3, use the user's preference instead.
 - **Everything else uses smart defaults.** Analysis depth, implementation approach, quality gates, verification methods, issue numbering, post-merge — all auto-determined by the agent or set to sensible defaults.
@@ -301,7 +327,6 @@ Combine **auto-detected values** (Step 7) with **interview answers** (Step 8) to
 {- "Full auto": "Analyze → Implement → Verify → Build → Commit → PR → Review (fully autonomous)"}
 {- "Stop before PR": "Analyze → Implement → Verify → Build → Commit → STOP (user creates PR)"}
 {- "Stop before commit": "Analyze → Implement → STOP (user reviews code, then commits)"}
-{- "Plan only": "Analyze → STOP (user decides next steps)"}
 
 ---
 
@@ -318,9 +343,6 @@ The agent determines analysis depth based on issue priority and complexity.
 - [ ] Affected code located and read
 - [ ] Root cause identified (or hypothesis formed)
 - [ ] Scope of change estimated
-
-{IF Q1 is "Plan only":}
-### >>> STOP: Present analysis and proposed plan to user. Wait for approval.
 
 ---
 
@@ -377,7 +399,7 @@ If build/test fails: fix errors, return to Phase 3.
 {FROM Q1:}
 {- "Full auto": create PR with body template, move issue to review via `viban review {id}`}
 {- "Stop before PR": commit and push only, notify user that PR is pending. Run `viban review {id}`.}
-{- "Stop before commit" / "Plan only": N/A — agent already stopped earlier}
+{- "Stop before commit": N/A — agent already stopped earlier}
 
 ### PR Body Template
 {AUTO_DETECTED from git history convention. If Q3 overrides, use that instead.}
@@ -391,7 +413,7 @@ If build/test fails: fix errors, return to Phase 3.
 
 ## Issue Management
 
-- Issue numbering: {FROM Q2: "Auto" = auto-increment (viban default), "Manual" = ask for external ID via `--ext-id` flag}
+- Issue numbering: {FROM Q2: "Auto" = auto-increment (viban default), "Sync with provider" = use `/viban:sync` for external tracker integration, "Manual" = ask for external ID via `--ext-id` flag}
 - Test evidence: include test output in PR body
 - Post-merge: auto-close issue (`viban done {id}`), delete branch
 
