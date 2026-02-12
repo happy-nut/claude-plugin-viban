@@ -149,7 +149,12 @@ sync_pull() {
             '.issues[] | select(.external_id == $eid)' "$VIBAN_JSON" 2>/dev/null)
 
         if [[ -z "$viban_card" || "$viban_card" == "null" ]]; then
-            # New remote issue -> import
+            # New remote issue -> import (skip already-closed issues)
+            if [[ "$status" == "done" ]]; then
+                echo "  == ${ext_id} \"${title}\" (closed, skipped)"
+                ((unchanged++))
+                continue
+            fi
             if [[ "$dry_run" == "true" ]]; then
                 echo "  <- ${ext_id} \"${title}\" (new card to create)"
             else
@@ -188,6 +193,24 @@ sync_pull() {
             local viban_id viban_updated
             viban_id=$(echo "$viban_card" | jq -r '.id')
             viban_updated=$(echo "$viban_card" | jq -r '.updated_at')
+
+            # Remote issue closed -> remove card from viban
+            if [[ "$status" == "done" ]]; then
+                if [[ "$dry_run" == "true" ]]; then
+                    echo "  <- ${ext_id} \"${title}\" (closed remotely, will remove card)"
+                else
+                    jq --argjson id "$viban_id" 'del(.issues[]|select((.id|tonumber)==$id))' \
+                        "$VIBAN_JSON" > "${VIBAN_JSON}.tmp" && mv "${VIBAN_JSON}.tmp" "$VIBAN_JSON"
+                    # Remove sync metadata for this card
+                    local meta_tmp
+                    meta_tmp=$(read_sync_meta)
+                    meta_tmp=$(echo "$meta_tmp" | jq --arg vid "$viban_id" 'del(.issues[$vid])')
+                    write_sync_meta "$meta_tmp"
+                    echo "  <- ${ext_id} \"${title}\" (closed remotely, card removed)"
+                fi
+                ((pulled++))
+                continue
+            fi
 
             # Get last known sync timestamps
             local meta
@@ -461,6 +484,7 @@ main() {
     local push_new=false
     local pull_only=false
     local push_only=false
+    local auto_mode=false
     local repo_override=""
 
     while [[ $# -gt 0 ]]; do
@@ -471,6 +495,7 @@ main() {
             --push-new)  push_new=true; shift ;;
             --pull-only) pull_only=true; shift ;;
             --push-only) push_only=true; shift ;;
+            --auto)      auto_mode=true; shift ;;
             --repo)      repo_override="$2"; shift 2 ;;
             --provider)  shift 2 ;;  # Already handled by bin/viban
             *)           echo "Unknown option: $1"; exit 1 ;;
@@ -513,6 +538,18 @@ main() {
     if [[ -z "$repo" || "$repo" == "null" ]]; then
         echo "Error: No repo configured. Run: viban sync --init"
         exit 1
+    fi
+
+    # Auto mode: silent pull-only for TUI background use
+    if [[ "$auto_mode" == "true" ]]; then
+        sync_pull "$repo" false >/dev/null 2>&1
+        local now
+        now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        local meta
+        meta=$(read_sync_meta)
+        meta=$(echo "$meta" | jq --arg now "$now" '.last_sync_at = $now')
+        write_sync_meta "$meta"
+        exit 0
     fi
 
     # Execute sync

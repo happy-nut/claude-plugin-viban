@@ -130,7 +130,7 @@ provider_fetch_issues() {
     local repo="$1"
 
     local issues
-    issues=$(gh issue list --repo "$repo" --state open --json number,title,body,labels,updatedAt --limit 200 2>/dev/null) || {
+    issues=$(gh issue list --repo "$repo" --state all --json number,title,body,labels,state,updatedAt --limit 200 2>/dev/null) || {
         echo "Error: Failed to fetch issues from $repo"
         return 1
     }
@@ -141,7 +141,8 @@ provider_fetch_issues() {
         title: .title,
         description: (.body // ""),
         status: (
-            if ([.labels[].name] | any(. == "review")) then "review"
+            if .state == "closed" then "done"
+            elif ([.labels[].name] | any(. == "review")) then "review"
             elif ([.labels[].name] | any(. == "in-progress")) then "in_progress"
             else "backlog"
             end

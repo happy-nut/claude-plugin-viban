@@ -275,6 +275,72 @@ else
 fi
 
 # ============================================================
+# Test 4b: GitHub provider closed issue -> done status
+# ============================================================
+echo ""
+echo "Test 4b: Closed issue status mapping"
+
+run_test
+# Verify _gh_status_to_viban maps closed -> done
+result=$(_gh_status_to_viban "closed" "")
+if [[ "$result" == "done" ]]; then
+    pass "closed state -> done status"
+else
+    fail "closed mapping" "done" "$result"
+fi
+
+run_test
+# Verify open with no labels -> backlog
+result=$(_gh_status_to_viban "open" "")
+if [[ "$result" == "backlog" ]]; then
+    pass "open state (no labels) -> backlog"
+else
+    fail "open no labels" "backlog" "$result"
+fi
+
+run_test
+# Verify closed overrides labels (closed + review label -> still done)
+result=$(_gh_status_to_viban "closed" "review")
+if [[ "$result" == "done" ]]; then
+    pass "closed state overrides review label -> done"
+else
+    fail "closed overrides label" "done" "$result"
+fi
+
+# ============================================================
+# Test 4c: Provider fetch returns closed issues with --state all
+# ============================================================
+echo ""
+echo "Test 4c: Provider fetch includes state field"
+
+run_test
+if grep -q '\-\-state all' "$PROJECT_ROOT/scripts/providers/github.sh"; then
+    pass "github.sh uses --state all"
+else
+    fail "state flag" "--state all" "not found"
+fi
+
+run_test
+if grep -q 'state' "$PROJECT_ROOT/scripts/providers/github.sh" | head -1 && \
+   grep -q '"state"' "$PROJECT_ROOT/scripts/providers/github.sh"; then
+    pass "github.sh includes state in --json fields"
+else
+    # Check more specifically
+    if grep -q 'state,updatedAt' "$PROJECT_ROOT/scripts/providers/github.sh"; then
+        pass "github.sh includes state in --json fields"
+    else
+        fail "state json field" "state in --json" "not found"
+    fi
+fi
+
+run_test
+if grep -q 'state == "closed"' "$PROJECT_ROOT/scripts/providers/github.sh"; then
+    pass "github.sh maps closed state to done"
+else
+    fail "closed->done mapping" "present" "not found"
+fi
+
+# ============================================================
 # Test 5: Sync metadata read/write
 # ============================================================
 echo ""
