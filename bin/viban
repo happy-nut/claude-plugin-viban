@@ -336,8 +336,9 @@ init_json() {
     if [[ ! -f "$VIBAN_JSON" ]]; then
         local max_wt_id=0
         if [[ -d "$VIBAN_DATA_DIR/worktrees" ]]; then
+            local wt_id
             for d in "$VIBAN_DATA_DIR/worktrees/"*(/N); do
-                local wt_id="${d:t}"
+                wt_id="${d:t}"
                 [[ "$wt_id" =~ ^[0-9]+$ ]] && (( wt_id > max_wt_id )) && max_wt_id=$wt_id
             done
         fi
@@ -700,14 +701,15 @@ build_column_lines() {
             done <<< "$_batch_output"
         else
             # All-ASCII fast path - no Python needed
+            local _t _mw _fc _d
             for (( _i=1; _i<=_n; _i++ )); do
-                local _t="${_titles[$_i]}" _mw=${_title_max_ws[$_i]}
+                _t="${_titles[$_i]}" _mw=${_title_max_ws[$_i]}
                 (( ${#_t} > _mw )) && _t="${_t:0:$_mw}"
                 _short_titles+=("$_t")
-                local _fc="${_title_pfxs[$_i]}${_t}"
+                _fc="${_title_pfxs[$_i]}${_t}"
                 _title_cws+=(${#_fc})
 
-                local _d="${_descs[$_i]}"
+                _d="${_descs[$_i]}"
                 (( ${#_d} > _desc_max_w )) && _d="${_d:0:$_desc_max_w}"
                 _short_descs+=("$_d")
                 _desc_cws+=($((2 + ${#_d})))
@@ -717,29 +719,34 @@ build_column_lines() {
 
     # --- Pass 3: Render cards ---
     local shown=0
+    local id priority issue_type ext_id did
+    local spinner_prefix title_content title_pad
+    local desc_content desc_pad
+    local priority_tag priority_color type_tag type_color tags_w tags_pad
+    local border_color text_color desc_color
     for (( _i=1; _i<=_n; _i++ )); do
-        local id="${_ids[$_i]}"
-        local priority="${_priorities[$_i]}"
-        local issue_type="${_types[$_i]}"
-        local ext_id="${_ext_ids[$_i]}"
-        local did; did=$(display_id "$id" "$ext_id")
+        id="${_ids[$_i]}"
+        priority="${_priorities[$_i]}"
+        issue_type="${_types[$_i]}"
+        ext_id="${_ext_ids[$_i]}"
+        did=$(display_id "$id" "$ext_id")
 
         # Title line
-        local spinner_prefix=""
+        spinner_prefix=""
         [[ "$st" == "in_progress" ]] && spinner_prefix="${SPINNER_FRAMES[$((SPINNER_IDX % ${#SPINNER_FRAMES[@]} + 1))]} "
-        local title_content="  ${spinner_prefix}${did} ${_short_titles[$_i]}"
-        local title_pad=$((card_inner - ${_title_cws[$_i]}))
+        title_content="  ${spinner_prefix}${did} ${_short_titles[$_i]}"
+        title_pad=$((card_inner - ${_title_cws[$_i]}))
         (( title_pad < 0 )) && title_pad=0
 
         # Description line
-        local desc_content="  ${_short_descs[$_i]}"
-        local desc_pad=$((card_inner - ${_desc_cws[$_i]}))
+        desc_content="  ${_short_descs[$_i]}"
+        desc_pad=$((card_inner - ${_desc_cws[$_i]}))
         (( desc_pad < 0 )) && desc_pad=0
 
         # Priority and type tags
-        local priority_tag="[$priority]"
-        local priority_color="${PRIORITY_COLOR[$priority]:-$A_DIM}"
-        local type_tag="" type_color="" tags_w=0
+        priority_tag="[$priority]"
+        priority_color="${PRIORITY_COLOR[$priority]:-$A_DIM}"
+        type_tag="" type_color="" tags_w=0
         if [[ -n "$issue_type" ]]; then
             type_tag="[${TYPE_LABEL[$issue_type]:-$issue_type}]"
             type_color="${TYPE_COLOR[$issue_type]:-$A_DIM}"
@@ -747,11 +754,11 @@ build_column_lines() {
         else
             tags_w=${#priority_tag}
         fi
-        local tags_pad=$((card_inner - tags_w - 2))
+        tags_pad=$((card_inner - tags_w - 2))
 
-        local border_color="$A_DIM"
-        local text_color="$A_FG"
-        local desc_color="$A_DIM"
+        border_color="$A_DIM"
+        text_color="$A_FG"
+        desc_color="$A_DIM"
         if (( is_col_selected && shown == card_sel )); then
             border_color="${A_SELECTED}"
             text_color="${A_BOLD}${A_ACCENT}"
