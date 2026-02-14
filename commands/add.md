@@ -66,53 +66,21 @@ Issue #{id} registered
   Status: backlog
 ```
 
-## Step 6: Suggest Plan Mode
+## Step 6: Done
 
-**Skip** unless the issue clearly needs upfront design. Most issues don't.
+Report the registered issue and **stop immediately**. Do not suggest next steps, do not offer to plan, do not continue.
 
-Only suggest plan mode when:
-- The issue spans multiple subsystems or requires architectural decisions
-- The description is too vague to act on without investigation
-- P0 issues where a wrong fix could make things worse
-
-**Do NOT suggest** for: single-file fixes, straightforward bugs, feature additions with clear scope, chores, refactors with obvious targets.
-
-When suggesting, use AskUserQuestion:
-
-- header: "Next step", question: "This looks complex — want to plan before working on it?"
-- options:
-  - "Plan now" — Enter plan mode to analyze and design a solution
-  - "Later" — Just register, work on it later
-
-**"Plan now"**: `EnterPlanMode` → after approval, save to `.viban/plans/{issue-id}.md`:
-
-```bash
-mkdir -p .viban/plans
-```
-
-```markdown
-# Plan: {issue title}
-> Issue #{id} | {priority} | {type} | Created: {timestamp}
-
-{full plan content}
-```
-
-Report: `Plan saved to .viban/plans/{issue-id}.md — /viban:assign will auto-load it.`
-
-**"Later"**: end skill.
-
-> **Bias towards skipping.** When in doubt, just register and finish.
+> **This skill ends here. No exceptions.**
 
 ## Rules
 
 ### READ-ONLY MODE — This skill must NOT modify any files.
 
 **Allowed tools (whitelist — everything else is FORBIDDEN):**
-- `Bash`: ONLY for `viban add`, `viban list`, `cat .viban/workflow.md`, `mkdir -p .viban/plans`
-- `Write`: ONLY for `/tmp/viban-desc.md` (temp file for `--desc-file`) and `.viban/plans/*.md` (plan output)
-- `AskUserQuestion`: for clarification and plan mode suggestion
-- `EnterPlanMode`: when user chooses to plan
-- `Read`: for reading `.viban/workflow.md` and `.viban/plans/`
+- `Bash`: ONLY for `viban add`, `viban list`, `cat .viban/workflow.md`
+- `Write`: ONLY for `/tmp/viban-desc.md` (temp file for `--desc-file`)
+- `AskUserQuestion`: for clarification
+- `Read`: for reading `.viban/workflow.md`
 
 **FORBIDDEN tools and actions:**
 - `Edit`: NEVER use. No file modifications of any kind.
