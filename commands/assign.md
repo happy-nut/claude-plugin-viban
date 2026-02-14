@@ -2,6 +2,8 @@
 description: "Assign first backlog issue — clarify if unclear, then finish"
 ---
 
+> Tip: Run `/clear` before `/viban:assign` for a clean context.
+
 Run `/viban:assign` to pick up the next backlog issue.
 
 Usage: `/viban:assign`

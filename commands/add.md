@@ -2,6 +2,8 @@
 description: "Register a problem as a viban issue"
 ---
 
+> Tip: Run `/clear` before `/viban:add` for a clean context.
+
 # /add - Register Issue
 
 Register a problem as a viban issue. No codebase exploration, no solutions — symptoms only.
