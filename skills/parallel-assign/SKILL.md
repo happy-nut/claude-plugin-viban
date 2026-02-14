@@ -139,21 +139,14 @@ You are one of {N} parallel agents working in isolated git worktrees.
    Resolves: #{ID}"
    ```
 
-4. Push and create PR:
-   ```bash
-   git push -u origin {BRANCH}
-   gh pr create --title "type: title" --body "..." --base main
-   ```
+4. That's it. Stop after committing.
 
-5. Move issue to review:
-   ```bash
-   cd {REPO_ROOT}
-   viban review {ID}
-   ```
-
-ABSOLUTE RULES (violating any of these corrupts the board):
-- Run `viban review {ID}` as your LAST command before finishing. Always. Even on errors.
-- **FORBIDDEN: `viban done`** — this DELETES the card permanently. NEVER run it. Only the human runs `viban done` after reviewing the PR.
+ABSOLUTE RULES:
+- **Your job ends after committing.** The coordinator handles push, PR creation, and issue status.
+- **FORBIDDEN: `git push`** — the coordinator pushes from the main repo after verifying.
+- **FORBIDDEN: `gh pr create`** — the coordinator creates PRs after transplanting branches.
+- **FORBIDDEN: `viban done`** — this DELETES the card permanently.
+- **FORBIDDEN: `viban review`** — the coordinator handles issue status.
 - **FORBIDDEN: reading or writing `viban.json`** — use CLI commands only.
 - Do NOT run the full test suite — the coordinator handles that.
 - Do NOT remove the worktree — the coordinator handles cleanup.
@@ -178,34 +171,21 @@ for each (ID, BRANCH) in ISSUES:
 
 1. Wait for all background agents to complete (poll via `TaskOutput`)
 2. Collect results — note successes and failures
-3. For any issue where `viban review` was not called, run it now as safety net:
-   ```bash
-   viban review $ID
-   ```
 
 ---
 
 ## Phase 3: TRANSPLANT & CLEANUP
 
-After all agents finish, for each issue:
-
-### 3.1 Verify Local Branches
-
-The local branch already exists (created by `git worktree add -b`). After worktree removal, the branch and its commits remain in the local repo.
+After all agents finish, the coordinator handles everything from the main repo root.
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
-
-for entry in "${ISSUES[@]}"; do
-    BRANCH="${entry##*|}"
-    git log --oneline -3 "$BRANCH"
-done
 ```
 
-### 3.2 Remove Worktrees
+### 3.1 Remove Worktrees (branches survive)
 
-PRs have been created — worktrees are no longer needed:
+Worktree removal does NOT delete the branch or its commits — they remain in the local repo.
 
 ```bash
 for entry in "${ISSUES[@]}"; do
@@ -215,7 +195,42 @@ for entry in "${ISSUES[@]}"; do
 done
 ```
 
-### 3.3 Verify PRs Exist
+### 3.2 Verify Local Branches
+
+Confirm each branch has commits from the agent:
+
+```bash
+for entry in "${ISSUES[@]}"; do
+    BRANCH="${entry##*|}"
+    git log --oneline -3 "$BRANCH"
+done
+```
+
+If a branch has no new commits (agent failed), skip it and report.
+
+### 3.3 Push Branches & Create PRs
+
+For each branch with commits, push from the main repo and create a PR:
+
+```bash
+for entry in "${ISSUES[@]}"; do
+    ID="${entry%%|*}"
+    BRANCH="${entry##*|}"
+
+    # Push the local branch to remote
+    git push -u origin "$BRANCH"
+
+    # Create PR
+    gh pr create --head "$BRANCH" --base main \
+        --title "type: title" \
+        --body "Resolves: #${ID}"
+
+    # Move issue to review
+    viban review "$ID"
+done
+```
+
+### 3.4 Verify PRs Exist
 
 ```bash
 for entry in "${ISSUES[@]}"; do
@@ -269,9 +284,10 @@ Worktrees cleaned up. All PRs ready for human review.
 
 ## Error Handling
 
-- **Agent fails mid-work**: coordinator calls `viban review {ID}` as safety net
+- **Agent fails mid-work**: coordinator still attempts push + PR for any commits on the branch. If no commits, skip and call `viban review {ID}` to unblock the card.
 - **Worktree creation fails**: skip that issue, log error, continue with others
-- **PR creation fails in agent**: coordinator reports it; local branch still available for manual PR
+- **Push fails**: report it; local branch still available for manual push
+- **PR creation fails**: report it; branch is already pushed, user can create PR manually
 - **Test failures**: report which branch likely caused the failure
 
 ---
