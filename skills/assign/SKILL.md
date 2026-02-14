@@ -11,6 +11,23 @@ Assign the first backlog issue. If the description is unclear or lacks context, 
 
 ---
 
+## Step 0: Read Workflow (CRITICAL)
+
+Check in priority order — first match wins:
+
+1. `.viban/workflow.md` → `[ -f ".viban/workflow.md" ] && cat ".viban/workflow.md"`
+2. CLAUDE.md (legacy, only if no workflow.md):
+```bash
+for path in "./CLAUDE.md" "./.claude/CLAUDE.md" "../CLAUDE.md"; do
+    [ -f "$path" ] && cat "$path"
+done
+```
+Look for `Issue Resolution Workflow` or `Workflow` section.
+
+If a workflow exists, follow its conventions for issue handling.
+
+---
+
 ## Step 1: Assign
 
 ```bash
