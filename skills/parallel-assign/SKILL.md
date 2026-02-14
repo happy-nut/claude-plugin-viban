@@ -152,8 +152,10 @@ You are one of {N} parallel agents working in isolated git worktrees.
 
 CRITICAL:
 - Always run `viban review {ID}` before finishing, even on errors.
+- Do NOT run `viban done` — the card must stay in review for human review.
 - Do NOT run the full test suite — the coordinator handles that.
 - Do NOT remove the worktree — the coordinator handles cleanup.
+- IGNORE the "Post-merge" section of the workflow — that is for humans after PR approval.
 ```
 
 ### Dispatch Pattern
