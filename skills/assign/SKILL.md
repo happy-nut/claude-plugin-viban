@@ -1,217 +1,96 @@
 ---
 name: assign
-description: "Assign and resolve first backlog issue from viban board through to PR completion"
+description: "Assign first backlog issue — clarify if unclear, then finish"
 ---
 
 # /assign
 
-First backlog issue → Resolve → PR completion
+Assign the first backlog issue. If the description is unclear or lacks context, interview the user and enrich the issue. **Do NOT start implementation.**
 
-> **CLI only** (no direct viban.json access) | **No worktree** (branch in main repo)
+> **CLI only** (no direct viban.json access)
 
 ---
 
-## Phase 0: SETUP
-
-### 0.1 Read Workflow (CRITICAL)
-
-Check in priority order — first match wins, follow it exactly:
-
-1. `.viban/workflow.md` → `[ -f ".viban/workflow.md" ] && cat ".viban/workflow.md"`
-2. CLAUDE.md (legacy, only if no workflow.md):
-```bash
-for path in "./CLAUDE.md" "./.claude/CLAUDE.md" "../CLAUDE.md"; do
-    [ -f "$path" ] && cat "$path"
-done
-```
-Look for `Issue Resolution Workflow` or `Workflow` section.
-3. Default workflow (Phase 1 below)
-
-### 0.2 Git Setup & Assign
+## Step 1: Assign
 
 ```bash
-# Check uncommitted changes → AskUserQuestion if dirty
-[ -n "$(git status --porcelain)" ] && echo "Warning: Uncommitted changes"
-
-git checkout main && git fetch origin main && git reset --hard origin/main
-
 ISSUE_ID=$(viban assign 2>&1 | tail -1)
 [[ -z "$ISSUE_ID" || "$ISSUE_ID" == "No backlog" ]] && echo "No issues in backlog" && exit 0
 ```
 
-### 0.3 Detect Sync & Create Branch
+If backlog is empty: notify user and exit.
 
-```bash
-ISSUE_JSON=$(viban get $ISSUE_ID)
-EXT_ID=$(echo "$ISSUE_JSON" | jq -r '.external_id // ""')
-SYNC_ACTIVE=false; EXTERNAL_NUM=""
-
-if [ -n "$EXT_ID" ] && [ "$EXT_ID" != "null" ]; then
-    SYNC_ACTIVE=true
-    EXTERNAL_NUM="${EXT_ID##*:}"  # "github:42" -> "42"
-    git checkout -b "issue-${EXTERNAL_NUM}"
-else
-    git checkout -b issue-$ISSUE_ID
-fi
-```
-
-### 0.4 Load Plan (if available)
-
-```bash
-[ -f ".viban/plans/${ISSUE_ID}.md" ] && cat ".viban/plans/${ISSUE_ID}.md"
-```
-
-If plan exists: use as primary guide for Phase 1, skip redundant analysis, but verify plan is still current.
-
----
-
-## Phase 1: ANALYZE & IMPLEMENT
+## Step 2: Read Issue
 
 ```bash
 viban get $ISSUE_ID
 ```
 
-**With project workflow**: follow its exact steps.
-**Default** (no workflow): Understand → Locate → Analyze root cause → Implement minimal changes.
+Display the issue title, description, priority, and type to the user.
 
----
+## Step 3: Evaluate Clarity
 
-## Phase 2: VERIFY
+Assess whether the issue description provides enough context for someone to start working on it:
 
-Manual verification — do NOT run build/test here (Phase 3).
+- **Clear**: the symptom, affected area, and expected behavior are all understandable
+- **Unclear**: vague description, missing context, ambiguous scope, or multiple possible interpretations
 
-| Type | Tool |
-|------|------|
-| Web UI | Playwright MCP (`browser_navigate`, `browser_snapshot`, `browser_click`) |
-| API | WebFetch |
-| CLI | Bash |
-| Visual | Read (screenshot files) |
-| Browser | Chrome DevTools MCP |
+### If Clear
 
-Steps: identify what proves the fix → execute → confirm behavior → document evidence.
+Report the assignment and finish:
 
-Examples:
-- Web feature: navigate to page, take snapshot, verify element exists
-- API fix: fetch endpoint, check response status and body
-- CLI change: run command, verify output format
-- UI bug: navigate, interact, confirm no error
+```
+Issue #{id} assigned
+  Title: {title}
+  Priority: {priority} | Type: {type}
+  Status: in_progress
 
-If verification fails: return to Phase 1.
+Ready for work.
+```
 
----
+### If Unclear
 
-## Phase 3: SHIP
+Interview the user with AskUserQuestion to gather missing context. Ask about:
+- What specifically is the problem? (symptom)
+- Where does it happen? (location/trigger)
+- What is the expected behavior?
+- Any additional constraints or context?
 
-### 3.1 Build & Test
-
-Run project's build/test commands. If fail: fix → return to Phase 2.
-
-### 3.2 Rebase
+After gathering answers, update the issue description:
 
 ```bash
-git fetch origin main && git rebase origin/main
-# On conflict: resolve -> git add -> git rebase --continue
+cat > /tmp/viban-desc-update.md <<'VIBAN_EOF'
+{original description}
+
+## Clarification
+{gathered context from interview}
+VIBAN_EOF
+
+# Re-add the issue with enriched description (edit via TUI or recreate)
 ```
 
-### 3.3 Commit & Push
+Then report:
 
-```bash
-BRANCH=$(git branch --show-current)
-git add -A
-
-# Sync mode: "Closes #NUM" | Default: "Resolves: viban-ID"
-if [ "$SYNC_ACTIVE" = true ]; then
-    git commit -m "fix: issue title summary
-
-- Root cause: ...
-- Solution: ...
-
-Closes #$EXTERNAL_NUM"
-else
-    git commit -m "fix: issue title summary
-
-- Root cause: ...
-- Solution: ...
-
-Resolves: #$ISSUE_ID"
-fi
-
-git push -u origin "$BRANCH"
 ```
+Issue #{id} assigned and clarified
+  Title: {title}
+  Priority: {priority} | Type: {type}
+  Status: in_progress
 
-### 3.4 Create PR
-
-```bash
-EXISTING_PR=$(gh pr list --head "$BRANCH" --json number -q '.[0].number')
-
-if [ -z "$EXISTING_PR" ]; then
-    if [ "$SYNC_ACTIVE" = true ]; then
-        gh pr create --title "fix: title" \
-            --body "## Changes
-- ...
-
-Closes #$EXTERNAL_NUM
-
-## Verification
-- [ ] Manual verification completed
-- [ ] Build passing
-- [ ] Tests passing (if applicable)" --base main
-    else
-        gh pr create --title "fix: title" \
-            --body "## Changes
-- ...
-
-## Verification
-- [ ] Manual verification completed
-- [ ] Build passing
-- [ ] Tests passing (if applicable)" --base main
-    fi
-fi
-```
-
-### 3.5 Move to Review
-
-```bash
-viban review $ISSUE_ID
+Clarification added to issue description.
 ```
 
 ---
 
-## Phase 4: HANDOFF
+## CRITICAL
 
-```
-Issue #$ISSUE_ID → review | PR: gh pr view --web
-Verification: manual + build + workflow followed
-After approval: delete issue from viban TUI
-```
-
----
-
-## Checklist
-
-```
-[ ] Read .viban/workflow.md (or CLAUDE.md fallback) for project workflow
-[ ] Working on issue-$ISSUE_ID branch
-[ ] Implementation complete
-[ ] Manual verification passed (using appropriate tools)
-[ ] Build & tests passing
-[ ] Rebase complete
-[ ] PR created
-[ ] viban review executed
-```
-
----
-
-## CRITICAL: Status Transition Rule
-
-> **NEVER exit with issue still in `in_progress`.** Always run `viban review $ISSUE_ID` before exiting — whether completed or stopped early.
+> - This command **assigns only**. Do NOT create branches, write code, or start implementation.
+> - Do NOT run `viban review` — the issue stays in `in_progress` for the next work session.
+> - If the issue is clear, just report and finish immediately.
 
 ## CLI Reference
 
 | Command | Description |
 |---------|-------------|
-| `viban` | Open TUI |
-| `viban list` | Print board |
 | `viban assign [session]` | Assign issue |
 | `viban get <id>` | View issue |
-| `viban review <id>` | Move to review |
