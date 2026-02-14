@@ -1047,8 +1047,7 @@ delete_issue() {
     local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
     local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
 
-    # Determine branch name: prefer issue-{num} when external_id present
-    local branch="viban-$id"
+    local branch="issue-$id"
     local _ext_id=$(get_ext_id "$id")
     if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
         local _issue_num="${_ext_id##*:}"
@@ -1519,8 +1518,7 @@ cmd_done() {
     local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
     local wt_dir="$VIBAN_DATA_DIR/worktrees/$1"
 
-    # Determine branch name: prefer issue-{num} when external_id present
-    local branch="viban-$1"
+    local branch="issue-$1"
     local _ext_id=$(get_ext_id "$1")
     if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
         local _issue_num="${_ext_id##*:}"

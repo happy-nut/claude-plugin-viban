@@ -393,7 +393,7 @@ If build/test fails: fix errors, return to Phase 3.
 {AUTO_DETECTED from git history — infer format from existing commits. If Q3 overrides, use that instead.}
 
 ### Branch Convention
-{AUTO_DETECTED from existing patterns, or `viban-{id}` as default}
+{AUTO_DETECTED from existing patterns, or `issue-{id}` as default}
 
 ### Pull Request
 {FROM Q1:}

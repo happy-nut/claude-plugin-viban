@@ -60,16 +60,16 @@ EOF
 ### 🔴 Worktree 사용 금지
 - **main repo에서 feature branch로 직접 작업**
 - worktree 생성/사용 금지 (사용자 명시적 요청)
-- 브랜치 네이밍: `viban-{ISSUE_ID}` (예: `viban-78`)
+- 브랜치 네이밍: `issue-{ISSUE_ID}` (예: `issue-78`)
 
 ### Branch-Based Workflow
 ```bash
 # 1. main에서 분기
 git checkout main && git pull
-git checkout -b viban-{ISSUE_ID}
+git checkout -b issue-{ISSUE_ID}
 
 # 2. 작업 후 push
-git push -u origin viban-{ISSUE_ID}
+git push -u origin issue-{ISSUE_ID}
 
 # 3. PR 생성
 gh pr create --title "..." --body "..."

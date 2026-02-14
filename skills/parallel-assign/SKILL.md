@@ -55,16 +55,7 @@ for i in $(seq 1 $N); do
     ID=$(viban assign "$SESSION" 2>&1 | tail -1)
     [[ -z "$ID" || "$ID" == "No backlog" ]] && break
 
-    # Determine branch name (same logic as /viban:assign Phase 0.3)
-    ISSUE_JSON=$(viban get "$ID")
-    EXT_ID=$(echo "$ISSUE_JSON" | jq -r '.external_id // ""')
-    if [ -n "$EXT_ID" ] && [ "$EXT_ID" != "null" ]; then
-        EXTERNAL_NUM="${EXT_ID##*:}"
-        TITLE=$(echo "$ISSUE_JSON" | jq -r '.title' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | head -c 40)
-        BRANCH="issue-${EXTERNAL_NUM}-${TITLE}"
-    else
-        BRANCH="issue-${ID}"
-    fi
+    BRANCH="issue-${ID}"
 
     ISSUES+=("${ID}|${BRANCH}")
 done
@@ -83,7 +74,8 @@ mkdir -p "$REPO_ROOT/.viban/worktrees"
 for entry in "${ISSUES[@]}"; do
     ID="${entry%%|*}"
     BRANCH="${entry##*|}"
-    WT_DIR="$REPO_ROOT/.viban/worktrees/$BRANCH"
+    # Use issue ID as worktree dir name (matches cmd_done cleanup at .viban/worktrees/{ID})
+    WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 
     git worktree add -b "$BRANCH" "$WT_DIR" origin/main
 done
@@ -107,7 +99,7 @@ Spawn one **opus** agent per issue using `Task` tool. All agents launch in a sin
 You are resolving viban issue #{ID} in an isolated git worktree.
 
 ## Environment
-- Worktree path: {REPO_ROOT}/.viban/worktrees/{BRANCH}
+- Worktree path: {REPO_ROOT}/.viban/worktrees/{ID}
 - Branch: {BRANCH}
 - Main repo: {REPO_ROOT}
 - ALL file operations must happen inside the worktree path
@@ -125,7 +117,7 @@ You are resolving viban issue #{ID} in an isolated git worktree.
 
 You are one of {N} parallel agents working in isolated git worktrees.
 
-1. Work ONLY inside your worktree: {REPO_ROOT}/.viban/worktrees/{BRANCH}
+1. Work ONLY inside your worktree: {REPO_ROOT}/.viban/worktrees/{ID}
    - cd to the worktree before any work
    - All reads, edits, and writes must target files under this path
 
@@ -136,7 +128,7 @@ You are one of {N} parallel agents working in isolated git worktrees.
 
 3. After implementation, commit on your branch:
    ```bash
-   cd {REPO_ROOT}/.viban/worktrees/{BRANCH}
+   cd {REPO_ROOT}/.viban/worktrees/{ID}
    git add <specific files>
    git commit -m "type: description
 
@@ -214,8 +206,8 @@ PRs have been created — worktrees are no longer needed:
 
 ```bash
 for entry in "${ISSUES[@]}"; do
-    BRANCH="${entry##*|}"
-    WT_DIR="$REPO_ROOT/.viban/worktrees/$BRANCH"
+    ID="${entry%%|*}"
+    WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
     git worktree remove "$WT_DIR" --force
 done
 ```

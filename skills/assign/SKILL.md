@@ -49,8 +49,7 @@ SYNC_ACTIVE=false; EXTERNAL_NUM=""
 if [ -n "$EXT_ID" ] && [ "$EXT_ID" != "null" ]; then
     SYNC_ACTIVE=true
     EXTERNAL_NUM="${EXT_ID##*:}"  # "github:42" -> "42"
-    TITLE=$(echo "$ISSUE_JSON" | jq -r '.title' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | head -c 40)
-    git checkout -b "issue-${EXTERNAL_NUM}-${TITLE}"
+    git checkout -b "issue-${EXTERNAL_NUM}"
 else
     git checkout -b issue-$ISSUE_ID
 fi
