@@ -42,19 +42,20 @@ Infer from description. Don't ask unless truly ambiguous.
 ## Step 4: Register
 
 ```bash
-cat > /tmp/viban-desc.md <<'VIBAN_EOF'
+mkdir -p .viban/tmp
+cat > .viban/tmp/desc.md <<'VIBAN_EOF'
 ## Symptoms
 {one-sentence symptom}
 {additional context, if any}
 VIBAN_EOF
 
 # Auto numbering (default)
-viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type}
-rm -f /tmp/viban-desc.md
+viban add "{title}" --desc-file .viban/tmp/desc.md --priority {priority} --type {type}
+rm -f .viban/tmp/desc.md
 
 # Manual numbering (when workflow specifies)
-viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type} --ext-id "{external_id}"
-rm -f /tmp/viban-desc.md
+viban add "{title}" --desc-file .viban/tmp/desc.md --priority {priority} --type {type} --ext-id "{external_id}"
+rm -f .viban/tmp/desc.md
 ```
 
 Use `<<'VIBAN_EOF'` (quoted) to prevent shell interpretation.
@@ -79,8 +80,8 @@ Report the registered issue and **stop immediately**. Do not suggest next steps,
 ### READ-ONLY MODE — This skill must NOT modify any files.
 
 **Allowed tools (whitelist — everything else is FORBIDDEN):**
-- `Bash`: ONLY for `viban add`, `viban list`, `cat .viban/workflow.md`
-- `Write`: ONLY for `/tmp/viban-desc.md` (temp file for `--desc-file`)
+- `Bash`: ONLY for `mkdir -p .viban/tmp`, `viban add`, `viban list`, `cat .viban/workflow.md`, `rm -f .viban/tmp/desc.md`
+- `Write`: ONLY for `.viban/tmp/desc.md` (temp file for `--desc-file`)
 - `AskUserQuestion`: for clarification
 - `Read`: for reading `.viban/workflow.md`
 
