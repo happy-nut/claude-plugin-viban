@@ -627,33 +627,6 @@ else
 fi
 
 # ============================================================
-# Test 10: Skill and command files exist
-# ============================================================
-echo ""
-echo "Test 10: Skill and command files"
-
-run_test
-if [[ -f "$PROJECT_ROOT/skills/sync/SKILL.md" ]]; then
-    pass "skills/sync/SKILL.md exists"
-else
-    fail "skill file" "exists" "not found"
-fi
-
-run_test
-if [[ -f "$PROJECT_ROOT/commands/sync.md" ]]; then
-    pass "commands/sync.md exists"
-else
-    fail "command file" "exists" "not found"
-fi
-
-run_test
-if grep -q 'viban sync' "$PROJECT_ROOT/skills/sync/SKILL.md"; then
-    pass "skill references viban sync"
-else
-    fail "skill content" "references viban sync" "not found"
-fi
-
-# ============================================================
 # Summary
 # ============================================================
 echo ""

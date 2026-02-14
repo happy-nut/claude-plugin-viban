@@ -104,8 +104,9 @@ You are resolving viban issue #{ID} in an isolated git worktree.
 - Main repo: {REPO_ROOT}
 - ALL file operations must happen inside the worktree path
 
-## Workflow
-{paste workflow.md content}
+## Workflow (Analyze + Implement + Verify only)
+{paste workflow.md Phase 1 (Analyze), Phase 2 (Implement), and Phase 3 (Verify) sections ONLY}
+{DO NOT include: Pipeline summary, GitHub Sync, Phase 4 (Build and Test), Phase 5 (Ship), Issue Management, Post-merge, or Additional Rules}
 
 ## Issue Details
 {paste viban get output}
@@ -152,10 +153,9 @@ You are one of {N} parallel agents working in isolated git worktrees.
 
 CRITICAL:
 - Always run `viban review {ID}` before finishing, even on errors.
-- Do NOT run `viban done` — the card must stay in review for human review.
+- Do NOT run `viban done` — the coordinator handles post-merge cleanup.
 - Do NOT run the full test suite — the coordinator handles that.
 - Do NOT remove the worktree — the coordinator handles cleanup.
-- IGNORE the "Post-merge" section of the workflow — that is for humans after PR approval.
 ```
 
 ### Dispatch Pattern
