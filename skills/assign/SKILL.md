@@ -52,7 +52,7 @@ if [ -n "$EXT_ID" ] && [ "$EXT_ID" != "null" ]; then
     TITLE=$(echo "$ISSUE_JSON" | jq -r '.title' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | head -c 40)
     git checkout -b "issue-${EXTERNAL_NUM}-${TITLE}"
 else
-    git checkout -b issue-$ISSUE_ID
+    git checkout -b viban-$ISSUE_ID
 fi
 ```
 
@@ -192,7 +192,7 @@ After approval: delete issue from viban TUI
 
 ```
 [ ] Read .viban/workflow.md (or CLAUDE.md fallback) for project workflow
-[ ] Working on issue-$ISSUE_ID branch
+[ ] Working on viban-$ISSUE_ID branch
 [ ] Implementation complete
 [ ] Manual verification passed (using appropriate tools)
 [ ] Build & tests passing
