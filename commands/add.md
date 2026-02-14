@@ -105,10 +105,23 @@ Report: `Plan saved to .viban/plans/{issue-id}.md — /viban:assign will auto-lo
 
 ## Rules
 
-- **NEVER read or write `viban.json` directly** — always use `viban` CLI commands (`viban add`, `viban list`, etc.)
-- **NEVER edit, create, or modify any source code files** — this skill registers issues only
-- **NEVER start implementation** — even after plan mode, just save the plan and stop
-- No codebase exploration — assignee does that in `/viban:assign`
+### READ-ONLY MODE — This skill must NOT modify any files.
+
+**Allowed tools (whitelist — everything else is FORBIDDEN):**
+- `Bash`: ONLY for `viban add`, `viban list`, `cat .viban/workflow.md`, `mkdir -p .viban/plans`
+- `Write`: ONLY for `/tmp/viban-desc.md` (temp file for `--desc-file`) and `.viban/plans/*.md` (plan output)
+- `AskUserQuestion`: for clarification and plan mode suggestion
+- `EnterPlanMode`: when user chooses to plan
+- `Read`: for reading `.viban/workflow.md` and `.viban/plans/`
+
+**FORBIDDEN tools and actions:**
+- `Edit`: NEVER use. No file modifications of any kind.
+- `Write` to any path outside `/tmp/viban-*.md` and `.viban/plans/`: FORBIDDEN.
+- `Bash` for anything other than `viban` CLI and `cat`/`mkdir` above: FORBIDDEN.
+- No `git` commands. No source code reads. No codebase exploration.
+
+### Additional rules:
+- **NEVER read or write `viban.json` directly** — always use `viban` CLI commands
 - No solution proposals in the issue — symptoms only
 - Check duplicates first: `viban list`
 - P0 is system-down only
