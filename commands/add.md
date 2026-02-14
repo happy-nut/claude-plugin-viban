@@ -50,9 +50,11 @@ VIBAN_EOF
 
 # Auto numbering (default)
 viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type}
+rm -f /tmp/viban-desc.md
 
 # Manual numbering (when workflow specifies)
 viban add "{title}" --desc-file /tmp/viban-desc.md --priority {priority} --type {type} --ext-id "{external_id}"
+rm -f /tmp/viban-desc.md
 ```
 
 Use `<<'VIBAN_EOF'` (quoted) to prevent shell interpretation.
