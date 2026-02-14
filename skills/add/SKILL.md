@@ -65,12 +65,20 @@ Issue #{id} registered
 
 ## Step 6: Suggest Plan Mode
 
-**Skip** for trivial issues (typo, one-liner config, simple copy edit).
-**Recommend** for everything else. Use AskUserQuestion:
+**Skip** unless the issue clearly needs upfront design. Most issues don't.
 
-- header: "Next step", question: "Want to start planning the solution now?"
+Only suggest plan mode when:
+- The issue spans multiple subsystems or requires architectural decisions
+- The description is too vague to act on without investigation
+- P0 issues where a wrong fix could make things worse
+
+**Do NOT suggest** for: single-file fixes, straightforward bugs, feature additions with clear scope, chores, refactors with obvious targets.
+
+When suggesting, use AskUserQuestion:
+
+- header: "Next step", question: "This looks complex — want to plan before working on it?"
 - options:
-  - "Plan now (Recommended)" — Enter plan mode to analyze and design a solution
+  - "Plan now" — Enter plan mode to analyze and design a solution
   - "Later" — Just register, work on it later
 
 **"Plan now"**: `EnterPlanMode` → after approval, save to `.viban/plans/{issue-id}.md`:
@@ -90,11 +98,14 @@ Report: `Plan saved to .viban/plans/{issue-id}.md — /viban:assign will auto-lo
 
 **"Later"**: end skill.
 
-> **Bias towards planning.** When in doubt, suggest plan mode.
+> **Bias towards skipping.** When in doubt, just register and finish.
 
 ## Rules
 
+- **NEVER edit, create, or modify any source code files** — this skill registers issues only
+- **NEVER start implementation** — even after plan mode, just save the plan and stop
 - No codebase exploration — assignee does that in `/viban:assign`
-- No solution proposals — symptoms only
+- No solution proposals in the issue — symptoms only
 - Check duplicates first: `viban list`
 - P0 is system-down only
+- After Step 6 completes (plan saved or skipped), the skill is **done**. Do not continue.
