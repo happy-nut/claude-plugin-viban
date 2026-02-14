@@ -101,8 +101,10 @@ Clarification added to issue description.
 
 ## CRITICAL
 
+> - **NEVER read or write `viban.json` directly** — always use `viban` CLI commands (`viban assign`, `viban get`, `viban list`, etc.)
+> - **FORBIDDEN: `viban done`** — this DELETES the card permanently. NEVER run it.
+> - **FORBIDDEN: `viban review`** — the issue stays in `in_progress` for the next work session.
 > - This command **assigns only**. Do NOT create branches, write code, or start implementation.
-> - Do NOT run `viban review` — the issue stays in `in_progress` for the next work session.
 > - If the issue is clear, just report and finish immediately.
 
 ## CLI Reference

@@ -151,9 +151,10 @@ You are one of {N} parallel agents working in isolated git worktrees.
    viban review {ID}
    ```
 
-CRITICAL:
-- Always run `viban review {ID}` before finishing, even on errors.
-- Do NOT run `viban done` — the coordinator handles post-merge cleanup.
+ABSOLUTE RULES (violating any of these corrupts the board):
+- Run `viban review {ID}` as your LAST command before finishing. Always. Even on errors.
+- **FORBIDDEN: `viban done`** — this DELETES the card permanently. NEVER run it. Only the human runs `viban done` after reviewing the PR.
+- **FORBIDDEN: reading or writing `viban.json`** — use CLI commands only.
 - Do NOT run the full test suite — the coordinator handles that.
 - Do NOT remove the worktree — the coordinator handles cleanup.
 ```
@@ -277,8 +278,9 @@ Worktrees cleaned up. All PRs ready for human review.
 
 ## CRITICAL RULES
 
-> 1. **NEVER exit with any issue still in `in_progress`.** For every assigned issue, ensure `viban review {ID}` has been called.
-> 2. **ALWAYS clean up worktrees** after PRs are created. Worktree dirs must not linger in `.viban/worktrees/`.
+> 1. **NEVER read or write `viban.json` directly** — always use `viban` CLI commands. Direct JSON access causes race conditions and data corruption.
+> 2. **NEVER exit with any issue still in `in_progress`.** For every assigned issue, ensure `viban review {ID}` has been called.
+> 3. **ALWAYS clean up worktrees** after PRs are created. Worktree dirs must not linger in `.viban/worktrees/`.
 
 ## CLI Reference
 

@@ -7,6 +7,8 @@ description: "Register a problem as a viban issue"
 
 Register a problem as a viban issue. No codebase exploration, no solutions — symptoms only.
 
+> **CLI only** (no direct viban.json access)
+
 **Input**: `$ARGUMENTS`
 
 ## Step 1: Clarify (only if vague)
@@ -102,6 +104,7 @@ Report: `Plan saved to .viban/plans/{issue-id}.md — /viban:assign will auto-lo
 
 ## Rules
 
+- **NEVER read or write `viban.json` directly** — always use `viban` CLI commands (`viban add`, `viban list`, etc.)
 - **NEVER edit, create, or modify any source code files** — this skill registers issues only
 - **NEVER start implementation** — even after plan mode, just save the plan and stop
 - No codebase exploration — assignee does that in `/viban:assign`

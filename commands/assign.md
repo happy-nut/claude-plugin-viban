@@ -12,3 +12,5 @@ What it does:
 3. That's it — no implementation, no branch creation
 
 This command is for **assignment and clarification only**. Use other tools to start working on the assigned issue.
+
+**IMPORTANT:** Never read or write `viban.json` directly — always use `viban` CLI commands.

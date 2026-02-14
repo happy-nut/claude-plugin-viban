@@ -19,3 +19,5 @@ How it works:
 2. Spawns one opus agent per issue — each agent works exclusively in its own worktree
 3. Agents analyze, implement, commit, push, and create PRs independently
 4. Coordinator collects results, runs tests, and cleans up worktrees
+
+**IMPORTANT:** Never read or write `viban.json` directly — always use `viban` CLI commands. Direct JSON access causes race conditions.
