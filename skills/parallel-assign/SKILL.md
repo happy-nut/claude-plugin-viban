@@ -55,16 +55,7 @@ for i in $(seq 1 $N); do
     ID=$(viban assign "$SESSION" 2>&1 | tail -1)
     [[ -z "$ID" || "$ID" == "No backlog" ]] && break
 
-    # Determine branch name (same logic as /viban:assign Phase 0.3)
-    ISSUE_JSON=$(viban get "$ID")
-    EXT_ID=$(echo "$ISSUE_JSON" | jq -r '.external_id // ""')
-    if [ -n "$EXT_ID" ] && [ "$EXT_ID" != "null" ]; then
-        EXTERNAL_NUM="${EXT_ID##*:}"
-        TITLE=$(echo "$ISSUE_JSON" | jq -r '.title' | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | head -c 40)
-        BRANCH="issue-${EXTERNAL_NUM}-${TITLE}"
-    else
-        BRANCH="viban-${ID}"
-    fi
+    BRANCH="issue-${ID}"
 
     ISSUES+=("${ID}|${BRANCH}")
 done
