@@ -906,7 +906,7 @@ draw_board() {
 
 draw_footer() {
     printf '\033[K\n'
-    print_center "←→ Column  │  ↑↓ Card  │  Shift+↑↓ Reorder  │  Shift+←→ Move  │  Enter Edit  │  ⌫ Del  │  A Add  │  Q Quit" "${A_DIM}"
+    print_center "←→ Column  │  ↑↓ Card  │  Shift+↑↓ Reorder  │  Shift+←→ Move  │  Enter Edit/PR  │  ⌫ Del  │  A Add  │  Q Quit" "${A_DIM}"
 }
 
 read_key() {
@@ -1173,11 +1173,24 @@ level1_columns() {
                 if (( cnt > 0 )); then
                     local id=$(get_issue_id_at_index "$st" "$card" "$json_data")
                     [[ -n "$id" ]] && {
-                        printf '\033[?25h'
-                        stty echo 2>/dev/null
-                        edit_issue "$id"
-                        stty -echo 2>/dev/null
-                        printf '\033[?25l\033[2J\033[H'
+                        if [[ "$st" == "review" ]]; then
+                            # Open associated PR in browser
+                            local _branch="issue-${id}"
+                            local _ext_id=$(get_ext_id "$id")
+                            if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
+                                local _num="${_ext_id##*:}"
+                                gh pr view "$_num" --web 2>/dev/null || \
+                                    gh pr list --head "$_branch" --web 2>/dev/null
+                            else
+                                gh pr list --head "$_branch" --web 2>/dev/null
+                            fi
+                        else
+                            printf '\033[?25h'
+                            stty echo 2>/dev/null
+                            edit_issue "$id"
+                            stty -echo 2>/dev/null
+                            printf '\033[?25l\033[2J\033[H'
+                        fi
                     }
                 fi
                 ;;
