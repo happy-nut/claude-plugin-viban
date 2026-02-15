@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|Read",
         "command": "bash .claude/hooks/guard-viban-json.sh"
       }
     ]
