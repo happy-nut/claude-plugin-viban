@@ -1,11 +1,11 @@
 ---
 name: assign
-description: "Assign first backlog issue — clarify if unclear, then finish"
+description: "Assign first backlog issue and resolve it through to review"
 ---
 
 # /assign
 
-Assign the first backlog issue. If the description is unclear or lacks context, interview the user and enrich the issue. **Do NOT start implementation.**
+Assign the first backlog issue and execute the full resolution workflow. If the description is unclear, interview the user first.
 
 > **CLI only** (no direct viban.json access)
 
@@ -24,7 +24,7 @@ done
 ```
 Look for `Issue Resolution Workflow` or `Workflow` section.
 
-If a workflow exists, follow its conventions for issue handling.
+If a workflow exists, **follow it exactly** — its pipeline, conventions, and stop points override the defaults below.
 
 ---
 
@@ -47,23 +47,10 @@ Display the issue title, description, priority, and type to the user.
 
 ## Step 3: Evaluate Clarity
 
-Assess whether the issue description provides enough context for someone to start working on it:
+Assess whether the issue description provides enough context to start working:
 
 - **Clear**: the symptom, affected area, and expected behavior are all understandable
 - **Unclear**: vague description, missing context, ambiguous scope, or multiple possible interpretations
-
-### If Clear
-
-Report the assignment and finish:
-
-```
-Issue #{id} assigned
-  Title: {title}
-  Priority: {priority} | Type: {type}
-  Status: in_progress
-
-Ready for work.
-```
 
 ### If Unclear
 
@@ -86,15 +73,41 @@ VIBAN_EOF
 # Re-add the issue with enriched description (edit via TUI or recreate)
 ```
 
-Then report:
+## Step 4: Execute Workflow
+
+Follow the workflow from Step 0. If no workflow was found, use this default pipeline:
+
+### 4.1 Analyze
+- Explore the codebase to understand the issue
+- Identify root cause and scope of change
+
+### 4.2 Implement
+- Create a branch: `git checkout -b issue-{ISSUE_ID}`
+- Make the fix/feature changes
+- Write or update tests as appropriate
+
+### 4.3 Verify
+- Run build and tests to confirm the fix works
+- Verify no regressions
+
+### 4.4 Ship
+- Commit with conventional message referencing the issue
+- Push and create a PR
+
+## Step 5: Move to Review
+
+After shipping (or at the workflow's stop point):
+
+```bash
+viban review $ISSUE_ID
+```
+
+Report completion:
 
 ```
-Issue #{id} assigned and clarified
+Issue #{id} resolved → review
   Title: {title}
-  Priority: {priority} | Type: {type}
-  Status: in_progress
-
-Clarification added to issue description.
+  PR: {pr_url}
 ```
 
 ---
@@ -102,8 +115,8 @@ Clarification added to issue description.
 ## CRITICAL
 
 > - **NEVER read or write `viban.json` directly** — always use `viban` CLI commands (`viban assign`, `viban get`, `viban list`, `viban done`, etc.)
-> - This command **assigns only**. Do NOT create branches, write code, or start implementation.
-> - If the issue is clear, just report and finish immediately.
+> - Always end with `viban review` (or `viban done` if the workflow specifies it).
+> - Respect workflow stop points — if the workflow says "stop before PR", stop there.
 
 ## CLI Reference
 
