@@ -202,7 +202,11 @@ VIBAN_IS_GIT_REPO=false
 git rev-parse --git-dir &>/dev/null && VIBAN_IS_GIT_REPO=true
 
 if [[ -z "$VIBAN_DATA_DIR" ]]; then
-    VIBAN_DATA_DIR="${PWD}/.viban"
+    if $VIBAN_IS_GIT_REPO; then
+        VIBAN_DATA_DIR="$(git rev-parse --show-toplevel)/.viban"
+    else
+        VIBAN_DATA_DIR="${PWD}/.viban"
+    fi
 fi
 
 VIBAN_JSON="${VIBAN_DATA_DIR}/viban.json"
