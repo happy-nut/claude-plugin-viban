@@ -278,7 +278,8 @@ viban list              # Display kanban board
 viban add "Title" "Desc" P2 feat  # Create issue
 viban assign [session]  # Assign top backlog issue
 viban review [id]       # Move issue to review
-viban done <id>         # Mark issue as done
+viban done <id>         # Mark issue as done (card stays on board)
+viban done <id> --remove  # Delete card permanently
 viban get <id>          # Get issue details (JSON)
 viban help              # Show help
 ```

@@ -211,15 +211,15 @@ Ask only what the agent **cannot infer on its own**. One AskUserQuestion call, 3
   - "Stop before commit — I'll review the code first (review in terminal/IDE)"
 - multiSelect: false
 
-**Q2. Issue Numbering**
-- header: "Issue ID"
-- question: "How should issues be numbered when using `/viban:add`?"
+**Q2. Issue Tracker Sync**
+- header: "Sync"
+- question: "Sync issues with an external tracker (GitHub Issues, Jira, Linear, etc.)?"
 - options:
-  - "Auto — viban auto-assigns #1, #2, #3..."
-  - "Sync with provider — use `/viban:sync` to import from GitHub, Jira, Linear, etc."
-  - "Manual — ask for an external ID each time (e.g. PROJ-42, JIRA-123)"
+  - "Yes — set up two-way sync (issues imported from provider)"
+  - "No — auto-number locally (#1, #2, #3...)"
+  - "No — but use manual external IDs (e.g. PROJ-42)"
 - multiSelect: false
-- If user selects "Sync with provider", run `/viban:sync` to initialize sync after workflow setup completes.
+- If user selects "Yes", run `viban sync` to initialize sync after workflow setup completes.
 
 **Q3. Extra Rules**
 
@@ -302,12 +302,12 @@ Combine **auto-detected values** (Step 7) with **interview answers** (Step 8) to
 | Value | Source | Example |
 |-------|--------|---------|
 | Pipeline | Q1 | "Full auto" or "Stop before PR" |
-| Issue numbering | Q2 | "Auto" or "Manual" |
+| Issue tracker sync | Q2 | "Yes (sync)" or "No (auto)" or "No (manual IDs)" |
 | Extra rules | Q3 | User-typed rules or "None" |
 
 **Workflow generation principles:**
 - **Q1 (Pipeline) determines the entire automation structure** — which phases run automatically, where to stop, and whether to create PRs. "Full auto" = no stops + auto PR. "Stop before PR" = auto commit + user creates PR. "Stop before commit" = implement only + user reviews.
-- **Q2 (Issue numbering) determines how `/viban:add` handles IDs.** "Auto" = viban auto-assigns `#1`, `#2`. "Sync with provider" = use `/viban:sync` to import/sync issues from GitHub, Jira, Linear, etc. "Manual" = agent asks for an external ID each time and passes `--ext-id` to `viban add`. When manual, commits/PRs reference the external ID instead of `#N`.
+- **Q2 (Issue tracker sync) determines how issues are managed.** "Yes" = run `viban sync` after setup to import/sync issues from external tracker (GitHub, Jira, Linear, etc.), IDs come from provider. "No — auto-number" = viban auto-assigns `#1`, `#2`. "No — manual IDs" = agent asks for an external ID each time and passes `--ext-id` to `viban add`. When manual, commits/PRs reference the external ID instead of `#N`.
 - **Q3 (Extra rules) is appended verbatim to the Additional Rules section.** If user mentions conventions, evidence, CHANGELOG, language, etc., incorporate into the relevant phase.
 - **Commit/PR conventions are auto-detected from git history** (Step 7.2). If the user overrides via Q3, use the user's preference instead.
 - **Everything else uses smart defaults.** Analysis depth, implementation approach, quality gates, verification methods, issue numbering, post-merge — all auto-determined by the agent or set to sensible defaults.
@@ -413,7 +413,7 @@ If build/test fails: fix errors, return to Phase 3.
 
 ## Issue Management
 
-- Issue numbering: {FROM Q2: "Auto" = auto-increment (viban default), "Sync with provider" = use `/viban:sync` for external tracker integration, "Manual" = ask for external ID via `--ext-id` flag}
+- Issue tracking: {FROM Q2: "Yes" = synced with external tracker via `viban sync`, "No — auto-number" = auto-increment (viban default), "No — manual IDs" = ask for external ID via `--ext-id` flag}
 - Test evidence: include test output in PR body
 - Post-merge: auto-close issue (`viban done {id}`), delete branch
 

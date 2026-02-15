@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "bash .claude/hooks/guard-viban-json.sh"
+      }
+    ]
+  }
+}

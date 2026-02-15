@@ -1526,13 +1526,17 @@ cmd_review() {
 
 cmd_done() {
     init_json
-    [[ -z "$1" ]] && { echo "Usage: viban done <id>"; exit 1; }
+    [[ -z "$1" ]] && { echo "Usage: viban done <id> [--remove]"; exit 1; }
+    local id="$1"
+    local remove=false
+    [[ "$2" == "--remove" ]] && remove=true
+
     # Cleanup worktree if exists
     local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-    local wt_dir="$VIBAN_DATA_DIR/worktrees/$1"
+    local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
 
-    local branch="issue-$1"
-    local _ext_id=$(get_ext_id "$1")
+    local branch="issue-$id"
+    local _ext_id=$(get_ext_id "$id")
     if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
         local _issue_num="${_ext_id##*:}"
         if git -C "$repo_root" rev-parse --verify "issue-${_issue_num}" &>/dev/null 2>&1; then
@@ -1545,14 +1549,22 @@ cmd_done() {
         git -C "$repo_root" branch -D "$branch" 2>/dev/null
         echo "✓ worktree removed"
     fi
-    # Remove task (handle both string and number ID)
-    jq --argjson id "$1" 'del(.issues[]|select((.id|tonumber)==$id))' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && \
-    mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
 
-    # Clear iTerm2 session name
-    printf '\033]1;\007'
-
-    echo "✓ $(display_id "$1" "$(get_ext_id "$1")") completed & removed"
+    if $remove; then
+        # Delete card (old behavior)
+        jq --argjson id "$id" 'del(.issues[]|select((.id|tonumber)==$id))' \
+            "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+        printf '\033]1;\007'
+        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") completed & removed"
+    else
+        # Move to done status (non-destructive default)
+        local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        jq --argjson id "$id" --arg now "$now" \
+            '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"done",assigned_to:null,updated_at:$now}' \
+            "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+        printf '\033]1;\007'
+        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → done"
+    fi
 }
 
 cmd_get() { init_json; jq --argjson id "$1" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON"; }
@@ -1673,7 +1685,7 @@ main() {
         attach) shift; cmd_attach "$@";;
         assign) cmd_assign "$2";;
         review) cmd_review "$2";;
-        done)   cmd_done "$2";;
+        done)   cmd_done "$2" "$3";;
         get)    cmd_get "$2";;
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
@@ -1706,7 +1718,7 @@ main() {
             echo "  viban priority <id> <P0-P3>   Set priority"
             echo "  viban assign      Assign first backlog (by priority)"
             echo "  viban review      → Human Review"
-            echo "  viban done <id>   Complete & remove"
+            echo "  viban done <id> [--remove]   Complete (--remove to delete)"
             echo "  viban edit <id>   Edit task in editor"
             echo "  viban get <id>    Get task details (JSON)"
             echo "  viban migrate     Migrate: extract type from title"
