@@ -90,19 +90,39 @@ Follow the workflow from Step 0. If no workflow was found, use this default pipe
 - Run build and tests to confirm the fix works
 - Verify no regressions
 
-### 4.4 Ship
-- Commit with conventional message referencing the issue
-- Push and create a PR
+### 4.4 Ship (MANDATORY)
+
+Every step below is **required** unless the workflow explicitly says to stop earlier.
+
+```bash
+# 1. Commit
+git add -A
+git commit -m "fix: {description} (#$ISSUE_ID)"
+
+# 2. Push
+git push -u origin issue-$ISSUE_ID
+
+# 3. Create PR (REQUIRED — do NOT skip this)
+gh pr create --title "fix: {description}" --body "Resolves #$ISSUE_ID
+
+## Summary
+{what was changed and why}
+
+## Test plan
+{how it was verified}"
+```
+
+**If `gh pr create` fails**: fix the error and retry. Do NOT skip PR creation.
 
 ## Step 5: Move to Review
 
-After shipping (or at the workflow's stop point):
+After PR is created:
 
 ```bash
 viban review $ISSUE_ID
 ```
 
-Report completion:
+Report completion with the PR URL:
 
 ```
 Issue #{id} resolved → review
@@ -110,13 +130,16 @@ Issue #{id} resolved → review
   PR: {pr_url}
 ```
 
+**Do NOT report completion without a PR URL.**
+
 ---
 
 ## CRITICAL
 
 > - **NEVER read or write `viban.json` directly** — always use `viban` CLI commands (`viban assign`, `viban get`, `viban list`, `viban done`, etc.)
-> - Always end with `viban review` (or `viban done` if the workflow specifies it).
-> - Respect workflow stop points — if the workflow says "stop before PR", stop there.
+> - **MUST create a PR** via `gh pr create` unless the workflow explicitly says "stop before PR".
+> - **MUST call `viban review`** after PR creation. Do NOT finish without moving the issue to review.
+> - **MUST include PR URL** in the completion report. No URL = not done.
 
 ## CLI Reference
 
