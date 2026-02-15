@@ -136,9 +136,10 @@ Issue #{id} resolved → review
 
 ## CRITICAL
 
-> - **NEVER read or write `viban.json` directly** — always use `viban` CLI commands (`viban assign`, `viban get`, `viban list`, `viban done`, etc.)
+> - **NEVER read or write `viban.json` directly** — always use `viban` CLI commands (`viban assign`, `viban get`, `viban list`, etc.)
+> - **FORBIDDEN: `viban done`** — do NOT use `viban done` or `viban done --remove`. Cards must go to review, not done.
 > - **MUST create a PR** via `gh pr create` unless the workflow explicitly says "stop before PR".
-> - **MUST call `viban review`** after PR creation. Do NOT finish without moving the issue to review.
+> - **MUST call `viban review`** after PR creation. This is the ONLY way to finish. Do NOT use any other status change.
 > - **MUST include PR URL** in the completion report. No URL = not done.
 
 ## CLI Reference
@@ -147,6 +148,4 @@ Issue #{id} resolved → review
 |---------|-------------|
 | `viban assign [session]` | Assign issue |
 | `viban get <id>` | View issue |
-| `viban done <id>` | Mark as done (non-destructive) |
-| `viban done <id> --remove` | Delete card permanently |
-| `viban review [id]` | Move to review |
+| `viban review [id]` | Move to review (use this to finish) |
