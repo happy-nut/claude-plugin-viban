@@ -1385,12 +1385,31 @@ move_card_status() {
 cmd_list() {
     init_json
     local _done_ids=$(jq '[.issues[]|select(.status=="done")|.id]' "$VIBAN_JSON")
+    local filter_status=""
+    [[ "$1" == "--status" && -n "$2" ]] && filter_status="$2"
+
     echo ""
-    for st in $VIBAN_STATUSES; do
-        gum style --foreground "${STATUS_COLOR[$st]}" --bold "● ${STATUS_LABEL[$st]} ($(count_issues_by_status "$st"))"
-        get_issues_by_status "$st" | jq -r --argjson done "$_done_ids" '.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end)\(if ((.blocked_by // []) | length > 0 and any(. as $b | $done | index($b) == null)) then " [BLOCKED]" else "" end) \(.title)"'
+    if [[ -n "$filter_status" ]]; then
+        local count=$(jq -r --arg s "$filter_status" '[.issues[]|select(.status==$s)]|length' "$VIBAN_JSON")
+        echo "● $filter_status ($count)"
+        jq -r --arg s "$filter_status" --argjson done "$_done_ids" '.issues|map(select(.status==$s))|sort_by(.updated_at)|reverse|.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end)\(if ((.blocked_by // []) | length > 0 and any(. as $b | $done | index($b) == null)) then " [BLOCKED]" else "" end) \(.title)"' "$VIBAN_JSON"
         echo ""
-    done
+    else
+        for st in $VIBAN_STATUSES; do
+            gum style --foreground "${STATUS_COLOR[$st]}" --bold "● ${STATUS_LABEL[$st]} ($(count_issues_by_status "$st"))"
+            get_issues_by_status "$st" | jq -r '.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end) \(.title)"'
+            echo ""
+        done
+    fi
+}
+
+cmd_history() {
+    init_json
+    local count=$(jq '[.issues[]|select(.status=="done")]|length' "$VIBAN_JSON")
+    echo ""
+    echo "● Done ($count)"
+    jq -r '.issues|map(select(.status=="done"))|sort_by(.updated_at)|reverse|.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end) \(.title)  (\(.updated_at | split("T")[0]))"' "$VIBAN_JSON"
+    echo ""
 }
 
 cmd_priority() {
@@ -1564,10 +1583,10 @@ cmd_review() {
 
 cmd_done() {
     init_json
-    [[ -z "$1" ]] && { echo "Usage: viban done <id> [--remove]"; exit 1; }
+    [[ -z "$1" ]] && { echo "Usage: viban done <id> [--purge]"; exit 1; }
     local id="$1"
     local remove=false
-    [[ "$2" == "--remove" ]] && remove=true
+    [[ "$2" == "--remove" || "$2" == "--purge" ]] && remove=true
 
     # Cleanup worktree if exists
     local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -1801,7 +1820,8 @@ main() {
     check_deps
     init_json
     case "${1:-}" in
-        list)   cmd_list;;
+        list)   shift; cmd_list "$@";;
+        history) cmd_history;;
         add)    shift; cmd_add "$@";;
         attach) shift; cmd_attach "$@";;
         assign) cmd_assign "$2";;
@@ -1838,13 +1858,15 @@ main() {
             echo ""
             echo "  viban             TUI"
             echo "  viban list        Show board"
+            echo "  viban list --status <s>  Filter by status"
+            echo "  viban history     Show completed issues"
             echo "  viban add \"title\" [\"desc\"] [P0-P3] [type] [files...]  Add task"
             echo "  viban attach <id> <file1> [file2...]  Attach files to task"
             echo "  viban priority <id> <P0-P3>   Set priority"
             echo "  viban assign      Assign first backlog (by priority)"
             echo "  viban review      → Human Review"
             echo "  viban move <id> <status>     Move to status (backlog,in_progress,review,done)"
-            echo "  viban done <id> [--remove]   Complete (--remove to delete)"
+            echo "  viban done <id> [--purge]    Complete (--purge to permanently delete)"
             echo "  viban comment <id> \"msg\"  Add comment to task"
             echo "  viban link <id> blocks <id>  Add dependency"
             echo "  viban unlink <id> blocks <id>  Remove dependency"
