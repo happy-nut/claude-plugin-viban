@@ -88,6 +88,22 @@ cmd_add() {
 
     [[ -z "$title" ]] && { echo "Usage: viban add \"title\" [\"description\"] [priority] [type]"; exit 1; }
 
+    # Apply templates: .viban/templates.json defaults per issue type
+    local templates_file="$VIBAN_DATA_DIR/templates.json"
+    if [[ -f "$templates_file" && -n "$issue_type" ]]; then
+        local tmpl=$(jq -r --arg t "$issue_type" '.[$t] // empty' "$templates_file" 2>/dev/null)
+        if [[ -n "$tmpl" ]]; then
+            [[ "$priority" == "P3" ]] && {
+                local tmpl_priority=$(echo "$tmpl" | jq -r '.priority // empty')
+                [[ -n "$tmpl_priority" ]] && priority="$tmpl_priority"
+            }
+            [[ -z "$desc" ]] && {
+                local tmpl_desc=$(echo "$tmpl" | jq -r '.description // empty')
+                [[ -n "$tmpl_desc" ]] && desc="$tmpl_desc"
+            }
+        fi
+    fi
+
     # Duplicate detection: warn on similar titles (word-level Jaccard >= 0.5)
     local duplicates=$(jq -r --arg title "$title" '
         def words: ascii_downcase | gsub("[^a-z0-9가-힣\\s]"; " ") | split(" ") | map(select(length > 1)) | unique;
