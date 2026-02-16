@@ -248,6 +248,14 @@ provider_close_issue() {
     }
 }
 
+provider_push_comment() {
+    local repo="$1" remote_id="$2" body="$3"
+    gh issue comment "$remote_id" --repo "$repo" --body "$body" 2>/dev/null || {
+        echo "Warning: Failed to push comment to issue #$remote_id"
+        return 1
+    }
+}
+
 provider_ensure_labels() {
     local repo="$1"
 

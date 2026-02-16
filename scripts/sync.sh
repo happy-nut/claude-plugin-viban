@@ -29,6 +29,7 @@ load_provider() {
         provider_name provider_check_deps provider_check_auth
         provider_detect_config provider_fetch_issues provider_create_issue
         provider_update_issue provider_close_issue provider_ensure_labels
+        provider_push_comment
     )
     for func in "${required_funcs[@]}"; do
         if ! declare -f "$func" &>/dev/null; then
@@ -68,6 +69,90 @@ set_issue_meta() {
         --arg ru "$remote_updated" --arg vu "$viban_updated" \
         '.issues[$vid] = {remote_id: $rid, remote_updated_at: $ru, viban_updated_at: $vu}')
     write_sync_meta "$meta"
+}
+
+# ============================================================
+# Body Enrichment (blocked_by, sub-tasks)
+# ============================================================
+
+# Build enriched body with blocked_by and sub-task metadata for push
+build_enriched_body() {
+    local card_id="$1"
+    jq -r --argjson cid "$card_id" '
+        . as $root |
+        ($root.issues[] | select((.id|tonumber)==$cid)) as $card |
+        ($card.description // "") as $desc |
+        ([$card.blocked_by // [] | .[] | . as $bid |
+            ($root.issues[] | select((.id|tonumber)==($bid|tonumber)) | .external_id // null) as $ext |
+            if ($ext != null and ($ext | startswith("github:"))) then
+                "#" + ($ext | ltrimstr("github:"))
+            else
+                "viban:#" + ($bid|tostring)
+            end
+        ] | join(", ")) as $blocked_refs |
+        ([$root.issues[] | select((.parent_id // -1) == $cid) |
+            (if .external_id != null and (.external_id | startswith("github:")) then
+                "#" + (.external_id | ltrimstr("github:"))
+            else
+                "viban:#" + (.id|tostring)
+            end) as $ref |
+            if .status == "done" then "- [x] " + $ref + ": " + .title
+            else "- [ ] " + $ref + ": " + .title
+            end
+        ]) as $subtask_lines |
+        if ($blocked_refs == "" and ($subtask_lines | length) == 0) then
+            $desc
+        else
+            $desc + "\n\n<!-- viban:meta:start -->\n---\n" +
+            (if $blocked_refs != "" then "**Blocked by:** " + $blocked_refs + "\n" else "" end) +
+            (if ($subtask_lines | length) > 0 then "**Sub-tasks:**\n" + ($subtask_lines | join("\n")) + "\n" else "" end) +
+            "<!-- viban:meta:end -->"
+        end
+    ' "$VIBAN_JSON"
+}
+
+# Strip viban metadata sections from body (used during pull)
+strip_viban_meta() {
+    local body="$1"
+    if [[ "$body" != *"<!-- viban:meta:start -->"* ]]; then
+        printf '%s' "$body"
+        return
+    fi
+    printf '%s\n' "$body" | awk '
+        /<!-- viban:meta:start -->/ { exit }
+        { lines[++n] = $0 }
+        END {
+            while (n > 0 && lines[n] ~ /^[[:space:]]*$/) n--
+            for (i = 1; i <= n; i++) print lines[i]
+        }
+    '
+}
+
+# Push new comments to remote issue (tracks count to avoid duplicates)
+push_new_comments() {
+    local repo="$1" remote_id="$2" viban_id="$3" card_json="$4"
+    local comment_count
+    comment_count=$(echo "$card_json" | jq '.comments // [] | length')
+    [[ "$comment_count" -eq 0 ]] && return 0
+    local meta synced_count
+    meta=$(get_issue_meta "$viban_id")
+    synced_count=$(echo "$meta" | jq -r '.synced_comment_count // 0')
+
+    if [[ "$comment_count" -gt "$synced_count" ]]; then
+        local comments
+        comments=$(echo "$card_json" | jq '.comments // []')
+        for ci in $(seq "$synced_count" $((comment_count - 1))); do
+            local comment_text comment_at
+            comment_text=$(echo "$comments" | jq -r ".[$ci].text")
+            comment_at=$(echo "$comments" | jq -r ".[$ci].created_at")
+            provider_push_comment "$repo" "$remote_id" "**[viban @ ${comment_at}]** ${comment_text}" || true
+        done
+        local meta_full
+        meta_full=$(read_sync_meta)
+        meta_full=$(echo "$meta_full" | jq --arg vid "$viban_id" --argjson cc "$comment_count" \
+            '.issues[$vid].synced_comment_count = $cc')
+        write_sync_meta "$meta_full"
+    fi
 }
 
 # ============================================================
@@ -135,7 +220,7 @@ sync_pull() {
         local remote_id title description status priority type remote_updated
         remote_id=$(echo "$issue" | jq -r '.remote_id')
         title=$(echo "$issue" | jq -r '.title')
-        description=$(echo "$issue" | jq -r '.description // ""')
+        description=$(strip_viban_meta "$(echo "$issue" | jq -r '.description // ""')")
         status=$(echo "$issue" | jq -r '.status')
         priority=$(echo "$issue" | jq -r '.priority // "P3"')
         type=$(echo "$issue" | jq -r '.type // ""')
@@ -345,13 +430,18 @@ sync_push() {
             echo "  -> ${ext_id} \"${title}\" (will push local changes)"
             ((pushed++))
         else
-            echo "$card" | jq '{
+            local enriched_body
+            enriched_body=$(build_enriched_body "$viban_id")
+            echo "$card" | jq --arg body "$enriched_body" '{
                 title: .title,
-                description: (.description // ""),
+                description: $body,
                 status: .status,
                 priority: (.priority // "P3"),
                 type: (.type // "")
             }' | provider_update_issue "$repo" "$remote_id"
+
+            # Push new comments
+            push_new_comments "$repo" "$remote_id" "$viban_id" "$card"
 
             local now remote_updated
             now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -387,9 +477,11 @@ sync_push() {
                 ((pushed++))
             else
                 local new_remote_id
-                new_remote_id=$(echo "$card" | jq '{
+                local enriched_body
+                enriched_body=$(build_enriched_body "$viban_id")
+                new_remote_id=$(echo "$card" | jq --arg body "$enriched_body" '{
                     title: .title,
-                    description: (.description // ""),
+                    description: $body,
                     status: .status,
                     priority: (.priority // "P3"),
                     type: (.type // "")
@@ -408,6 +500,8 @@ sync_push() {
                     "$VIBAN_JSON" > "${VIBAN_JSON}.tmp" && mv "${VIBAN_JSON}.tmp" "$VIBAN_JSON"
 
                 set_issue_meta "$viban_id" "$new_remote_id" "$now" "$now"
+                # Push comments for newly created issue
+                push_new_comments "$repo" "$new_remote_id" "$viban_id" "$card"
                 echo "  -> ${ext_id} #${viban_id} \"${title}\" (created remote issue)"
                 ((pushed++))
             fi
@@ -564,4 +658,6 @@ main() {
     fi
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

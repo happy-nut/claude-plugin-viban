@@ -80,6 +80,7 @@ provider_create_issue() { echo "99"; }
 provider_update_issue() { cat > /dev/null; return 0; }
 provider_close_issue() { return 0; }
 provider_ensure_labels() { return 0; }
+provider_push_comment() { return 0; }
 MOCKEOF
     chmod +x "$MOCK_PROVIDER_DIR/scripts/providers/mock.sh"
 
@@ -95,6 +96,7 @@ provider_create_issue() { echo "Error: network failure" >&2; return 1; }
 provider_update_issue() { cat > /dev/null; return 0; }
 provider_close_issue() { return 0; }
 provider_ensure_labels() { return 0; }
+provider_push_comment() { return 0; }
 FAILEOF
     chmod +x "$MOCK_PROVIDER_DIR/scripts/providers/failing.sh"
 }
