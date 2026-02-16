@@ -1441,6 +1441,26 @@ cmd_add() {
 
     [[ -z "$title" ]] && { echo "Usage: viban add \"title\" [\"description\"] [priority] [type]"; exit 1; }
 
+    # Duplicate detection: warn on similar titles (word-level Jaccard >= 0.5)
+    local duplicates=$(jq -r --arg title "$title" '
+        def words: ascii_downcase | gsub("[^a-z0-9가-힣\\s]"; " ") | split(" ") | map(select(length > 1)) | unique;
+        ($title | words) as $new_words |
+        if ($new_words | length) == 0 then empty else
+            .issues[] | select(.status != "done") |
+            (.title | words) as $existing_words |
+            ([$new_words[] | select(. as $w | $existing_words | index($w) != null)] | length) as $overlap |
+            ([$new_words[], $existing_words[]] | unique | length) as $union |
+            select($union > 0 and ($overlap / $union) >= 0.5) |
+            "\(.id)\t\(.title)"
+        end
+    ' "$VIBAN_JSON")
+    if [[ -n "$duplicates" ]]; then
+        echo "⚠ Potential duplicate(s):"
+        while IFS=$'\t' read -r dup_id dup_title; do
+            echo "  #$dup_id $dup_title"
+        done <<< "$duplicates"
+    fi
+
     local id=$(get_next_id) now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     # Validate priority
     [[ ! "$priority" =~ ^P[0-3]$ ]] && priority="P3"
