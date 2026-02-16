@@ -10,16 +10,16 @@
 
 ## Why viban?
 
-- **No Worktree Complexity** - Just a single JSON file. No git worktrees, no complex setup.
 - **Lightweight & Fast** - Pure shell script with minimal dependencies. Starts instantly.
 - **Local First** - Your issues stay in your repo. No external services or accounts needed.
 - **AI-Native** - Built for Claude Code integration from the ground up.
+- **Parallel Worktrees** - Resolve multiple issues simultaneously via isolated git worktrees.
 
 ## Recommended Workflow
 
 ![recommended workflow](assets/screenshot.png)
 
-The most effective way to use viban is with **multiple terminal sessions**:
+**Sequential mode** — multiple terminal sessions, one issue at a time:
 
 ```
 ┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
@@ -33,15 +33,33 @@ The most effective way to use viban is with **multiple terminal sessions**:
 └───────────────────┘  └───────────────────┘  └───────────────────┘
 ```
 
-- **Session 1**: QA your product, find issues, run `/viban:add` to register them
-- **Session 2**: Run `/viban:assign` to pick the next issue and resolve it
-- **Session 3**: Keep `viban` TUI open to monitor the board
+**Parallel mode** — resolve multiple issues at once with `/viban:parallel-assign`:
 
-This separation keeps your workflow clean and prevents context switching.
+```
+┌───────────────────┐
+│   Coordinator     │  /viban:parallel-assign 3
+│                   │
+│  Assigns issues,  │──┬──────────────────────────────────────┐
+│  creates worktrees│  │                                      │
+│  collects results │  ▼                  ▼                   ▼
+│                   │  ┌──────────┐  ┌──────────┐  ┌──────────┐
+│                   │  │ Agent 1  │  │ Agent 2  │  │ Agent 3  │
+│                   │  │ wt/#12   │  │ wt/#13   │  │ wt/#14   │
+│                   │  │ Analyze  │  │ Analyze  │  │ Analyze  │
+│                   │  │ Implement│  │ Implement│  │ Implement│
+│                   │  │ Commit   │  │ Commit   │  │ Commit   │
+│  Push, create PRs │  └──────────┘  └──────────┘  └──────────┘
+│  Run tests, report│
+└───────────────────┘
+```
+
+- Each agent works in an isolated git worktree (`.viban/worktrees/{ID}`)
+- Zero interference between agents — no merge conflicts
+- Coordinator pushes branches, creates PRs, and runs tests after all agents finish
 
 ## Features
 
-- **4-Column Kanban Board**: `backlog` → `in_progress` → `review` → `done`
+- **3-Column Kanban Board**: `backlog` → `in_progress` → `review` (done moves to history)
 - **Priority Levels**: P0 (critical) to P3 (low priority)
 - **Type Tags**: bug, feat, chore, refactor
 - **TUI Navigation**: Interactive terminal UI with gum
