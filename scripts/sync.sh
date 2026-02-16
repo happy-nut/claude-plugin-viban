@@ -22,6 +22,7 @@ load_provider() {
         echo "Error: Provider script not found: $PROVIDER_SCRIPT"
         return 1
     fi
+    # shellcheck source=/dev/null
     source "$PROVIDER_SCRIPT"
 
     # Validate provider interface
@@ -404,7 +405,7 @@ sync_push() {
         local viban_id ext_id remote_id title status viban_updated
         viban_id=$(echo "$card" | jq -r '.id')
         ext_id=$(echo "$card" | jq -r '.external_id')
-        remote_id="${ext_id#${provider_prefix}}"
+        remote_id="${ext_id#"${provider_prefix}"}"
         title=$(echo "$card" | jq -r '.title')
         status=$(echo "$card" | jq -r '.status')
         viban_updated=$(echo "$card" | jq -r '.updated_at')

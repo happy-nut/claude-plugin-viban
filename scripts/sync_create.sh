@@ -21,6 +21,7 @@ PROVIDER_SCRIPT="${VIBAN_SCRIPT_DIR}/scripts/providers/${VIBAN_PROVIDER}.sh"
 if [[ ! -f "$PROVIDER_SCRIPT" ]]; then
     exit 1
 fi
+# shellcheck source=/dev/null
 source "$PROVIDER_SCRIPT"
 
 # Read card from viban.json
