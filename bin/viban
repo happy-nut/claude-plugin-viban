@@ -225,6 +225,8 @@ main() {
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
         stats)   cmd_stats;;
+        backup)  cmd_backup;;
+        restore) shift; cmd_restore "$@";;
         migrate) cmd_migrate;;
         sync)   shift; cmd_sync "$@";;
         --version|-v)
@@ -264,6 +266,8 @@ main() {
             echo "  viban edit <id>   Edit task in editor"
             echo "  viban get <id>    Get task details (JSON)"
             echo "  viban stats       Show throughput metrics and statistics"
+            echo "  viban backup      Snapshot viban.json to backups/"
+            echo "  viban restore [f] List or restore a backup"
             echo "  viban migrate     Migrate: extract type from title"
             echo "  viban sync        Sync with external issue tracker (GitHub, etc.)"
             echo "  viban update      Update to latest version (if available)"

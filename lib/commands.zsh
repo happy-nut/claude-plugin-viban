@@ -513,3 +513,43 @@ cmd_sync() {
     VIBAN_PROVIDER="$provider" VIBAN_SCRIPT_DIR="$VIBAN_SCRIPT_DIR" \
         bash "$VIBAN_SCRIPT_DIR/scripts/sync.sh" "$@"
 }
+
+cmd_backup() {
+    init_json
+    local backup_dir="$VIBAN_DATA_DIR/backups"
+    mkdir -p "$backup_dir"
+    local ts=$(date +"%Y%m%d_%H%M%S")
+    local backup_file="$backup_dir/viban_${ts}.json"
+    cp "$VIBAN_JSON" "$backup_file"
+    echo "✓ Backup saved: $backup_file"
+}
+
+cmd_restore() {
+    init_json
+    local backup_dir="$VIBAN_DATA_DIR/backups"
+    if [[ ! -d "$backup_dir" ]] || [[ -z "$(ls -A "$backup_dir" 2>/dev/null)" ]]; then
+        echo "No backups found in $backup_dir"
+        return 1
+    fi
+
+    if [[ -n "$1" ]]; then
+        # Restore specific file
+        local target="$backup_dir/$1"
+        [[ ! -f "$target" ]] && { echo "Error: Backup '$1' not found"; return 1; }
+        cp "$target" "$VIBAN_JSON"
+        echo "✓ Restored from $1"
+    else
+        # List available backups
+        echo "Available backups:"
+        local count=0
+        for f in "$backup_dir"/viban_*.json(On); do
+            ((count++))
+            local size=$(wc -c < "$f" | tr -d ' ')
+            local issues=$(jq '.issues|length' "$f" 2>/dev/null || echo "?")
+            echo "  ${f:t}  (${issues} issues, ${size} bytes)"
+        done
+        [[ $count -eq 0 ]] && echo "  (none)"
+        echo ""
+        echo "Usage: viban restore <filename>"
+    fi
+}
