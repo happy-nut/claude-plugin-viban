@@ -1571,6 +1571,36 @@ cmd_done() {
     fi
 }
 
+cmd_move() {
+    init_json
+    [[ -z "$1" || -z "$2" ]] && { echo "Usage: viban move <id> <status>"; exit 1; }
+    local id="$1"
+    local new_status="$2"
+
+    # Validate status
+    local valid_statuses="backlog in_progress review done"
+    if [[ ! " $valid_statuses " == *" $new_status "* ]]; then
+        echo "Error: Invalid status '$new_status'. Valid: backlog, in_progress, review, done"
+        exit 1
+    fi
+
+    # Verify issue exists
+    local cur_status=$(jq -r --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)|.status//empty' "$VIBAN_JSON")
+    [[ -z "$cur_status" ]] && { echo "Error: Issue #$id not found"; exit 1; }
+
+    if [[ "$cur_status" == "$new_status" ]]; then
+        echo "Issue #$id is already in $new_status"
+        return 0
+    fi
+
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    jq --argjson id "$id" --arg s "$new_status" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:$s,updated_at:$now}' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → $new_status"
+}
+
 cmd_get() { init_json; jq --argjson id "$1" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON"; }
 
 cmd_attach() {
@@ -1690,6 +1720,7 @@ main() {
         assign) cmd_assign "$2";;
         review) cmd_review "$2";;
         done)   cmd_done "$2" "$3";;
+        move)   cmd_move "$2" "$3";;
         get)    cmd_get "$2";;
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
@@ -1722,6 +1753,7 @@ main() {
             echo "  viban priority <id> <P0-P3>   Set priority"
             echo "  viban assign      Assign first backlog (by priority)"
             echo "  viban review      → Human Review"
+            echo "  viban move <id> <status>     Move to status (backlog,in_progress,review,done)"
             echo "  viban done <id> [--remove]   Complete (--remove to delete)"
             echo "  viban edit <id>   Edit task in editor"
             echo "  viban get <id>    Get task details (JSON)"
