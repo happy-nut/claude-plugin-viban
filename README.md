@@ -6,7 +6,7 @@
 [![npm version](https://badge.fury.io/js/claude-plugin-viban.svg)](https://www.npmjs.com/package/claude-plugin-viban)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![viban screenshot](assets/screenshot.png)
+![viban](assets/viban.png)
 
 ## Why viban?
 
@@ -16,6 +16,8 @@
 - **AI-Native** - Built for Claude Code integration from the ground up.
 
 ## Recommended Workflow
+
+![recommended workflow](assets/screenshot.png)
 
 The most effective way to use viban is with **multiple terminal sessions**:
 
