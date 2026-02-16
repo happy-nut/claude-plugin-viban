@@ -16,12 +16,33 @@ init_json() {
         fi
         local next_id=$((max_wt_id + 1))
         echo "{\"version\":2,\"next_id\":$next_id,\"issues\":[]}" > "$VIBAN_JSON"
+    elif ! jq empty "$VIBAN_JSON" 2>/dev/null; then
+        echo "Error: $VIBAN_JSON is not valid JSON"
+        echo "Run 'viban restore' to recover from a backup"
+        exit 1
     elif [[ $(jq '.version // 1' "$VIBAN_JSON") -lt 2 ]]; then
         jq '{
             version: 2,
             next_id: (([.issues[].id] | max // 0) + 1),
             issues: .issues
         }' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+    fi
+
+    # Validate required structure
+    if [[ -f "$VIBAN_JSON" ]]; then
+        local valid=$(jq -r '
+            if (.issues | type) != "array" then "missing_issues"
+            elif (.version | type) != "number" then "missing_version"
+            elif (.issues | map(select(.id == null or .title == null or .status == null)) | length) > 0 then "invalid_issue"
+            else "ok"
+            end
+        ' "$VIBAN_JSON" 2>/dev/null)
+        if [[ "$valid" != "ok" ]]; then
+            echo "Error: viban.json validation failed ($valid)"
+            echo "  Required: .version (number), .issues (array), each issue needs id, title, status"
+            echo "Run 'viban restore' to recover from a backup"
+            exit 1
+        fi
     fi
 }
 
