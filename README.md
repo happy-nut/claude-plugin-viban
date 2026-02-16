@@ -1,6 +1,6 @@
 # viban
 
-**Vi**sual Kan**ban** - A simple, lightweight local Kanban board for AI-human collaborative issue tracking.
+**Vi**sual Kan**ban** — Issue tracking designed for AI agents.
 
 [![CI](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml/badge.svg)](https://github.com/happy-nut/claude-plugin-viban/actions/workflows/ci.yml)
 [![npm version](https://badge.fury.io/js/claude-plugin-viban.svg)](https://www.npmjs.com/package/claude-plugin-viban)
@@ -8,18 +8,62 @@
 
 ![viban](assets/viban.png)
 
+Register bugs. Claude picks them up, resolves them, and creates PRs — while you keep finding the next issue.
+
+```bash
+# You find a bug and register it
+/viban:add "Login fails after password reset"
+
+# Claude assigns itself the top-priority issue and starts working
+/viban:assign
+
+# Or resolve 3 issues in parallel — each in its own git worktree
+/viban:parallel-assign 3
+```
+
 ## Why viban?
 
-- **Lightweight & Fast** - Pure shell script with minimal dependencies. Starts instantly.
-- **Local First** - Your issues stay in your repo. No external services or accounts needed.
-- **AI-Native** - Built for Claude Code integration from the ground up.
-- **Parallel Worktrees** - Resolve multiple issues simultaneously via isolated git worktrees.
+GitHub Issues, Linear, and Jira are built for humans coordinating with humans. viban is built for **humans coordinating with AI agents**.
 
-## Recommended Workflow
+| | Traditional trackers | viban |
+|---|---|---|
+| **Who resolves issues?** | Human developers | AI agents (Claude Code) |
+| **Parallel work** | Manual branch management | Isolated worktrees, zero conflicts |
+| **Where it lives** | External SaaS | Your repo (single JSON file) |
+| **Setup** | Accounts, permissions, integrations | `npm install -g claude-plugin-viban` |
+| **Context switching** | Browser ↔ terminal | Everything in terminal |
+| **Already using GitHub Issues?** | — | Two-way sync included |
+
+## Quick Start
+
+### For Claude Code Users
+
+```bash
+/install claude-plugin-viban
+/viban:setup
+```
+
+### For Terminal Users
+
+```bash
+npm install -g claude-plugin-viban
+```
+
+Then start tracking:
+
+```bash
+viban add "Fix login error" "Users cannot login after password reset" P1 bug
+viban add "Add dark mode" P2 feat
+viban                        # Open TUI board
+```
+
+## How It Works
+
+### Sequential Mode
+
+Run multiple terminal sessions — one for QA, one for resolution, one for monitoring:
 
 ![recommended workflow](assets/screenshot.png)
-
-**Sequential mode** — multiple terminal sessions, one issue at a time:
 
 ```
 ┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐
@@ -33,7 +77,9 @@
 └───────────────────┘  └───────────────────┘  └───────────────────┘
 ```
 
-**Parallel mode** — resolve multiple issues at once with `/viban:parallel-assign`:
+### Parallel Mode
+
+Resolve multiple issues at once with `/viban:parallel-assign`:
 
 ```
 ┌───────────────────┐
@@ -57,79 +103,49 @@
 - Zero interference between agents — no merge conflicts
 - Coordinator pushes branches, creates PRs, and runs tests after all agents finish
 
-## Features
+## Claude Code Skills
 
-- **3-Column Kanban Board**: `backlog` → `in_progress` → `review` (done moves to history)
-- **Priority Levels**: P0 (critical) to P3 (low priority)
-- **Type Tags**: bug, feat, chore, refactor
-- **TUI Navigation**: Interactive terminal UI with gum
-- **Issue Comments**: Timestamped progress notes on issues
-- **Issue Dependencies**: Block/unblock relationships between issues
-- **Sub-tasks**: Parent-child issue decomposition with progress tracking
-- **Filter & Search**: Filter by status, priority, type, or search text
-- **Board Export**: Export board as markdown table or standalone HTML
-- **Backup & Restore**: Snapshot and recover viban.json
-- **Issue Templates**: Default values per issue type via `.viban/templates.json`
-- **Dry-run Mode**: Preview destructive operations before executing
-- **Auto Changelog**: Generate changelogs from conventional commits
-- **Statistics**: Throughput metrics, cycle time, and board summary
-- **GitHub Sync**: Two-way sync with GitHub Issues (comments, dependencies, sub-tasks)
-- **Parallel Sessions**: Multiple Claude Code sessions can work simultaneously
-- **Session Assignment**: Prevents duplicate work across parallel agents
+These are the core AI-agent commands. Each one is a Claude Code slash command.
 
-## Requirements
+### `/viban:add` — Register an issue
 
-- zsh
-- python3 (macOS/Linux built-in)
-- [gum](https://github.com/charmbracelet/gum)
-- [jq](https://jqlang.github.io/jq/)
-- [gh](https://cli.github.com/) (optional, for GitHub Issues sync)
+Analyzes your description and creates a structured issue with proper priority, type, and description.
 
-> **Tip:** If using Claude Code, run `/viban:setup` to install all dependencies automatically.
-
-## Installation
-
-### For Claude Code Users
-
-```bash
-/plugin marketplace add https://github.com/happy-nut/claude-plugin-viban
-/plugin install viban
-/viban:setup   # Installs all dependencies automatically
+```
+/viban:add "Search is broken on mobile"
+→ Infers: P1 bug, enriches description, registers to backlog
 ```
 
-### For Terminal Users
+### `/viban:assign` — Assign and resolve
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/happy-nut/claude-plugin-viban/main/install.sh | bash
+Picks the highest-priority unblocked backlog issue, assigns it, and follows your project's workflow to resolve it.
+
+```
+/viban:assign
+→ Picks #7 (P0 bug), analyzes code, implements fix, creates PR
 ```
 
-Or via npm (requires zsh, gum, jq pre-installed):
-```bash
-npm install -g claude-plugin-viban
+### `/viban:parallel-assign` — Parallel resolution
+
+Assigns N issues (default 3, max 5) and spawns one agent per issue in isolated git worktrees.
+
+```
+/viban:parallel-assign 3
+→ Assigns #8, #9, #10 — three agents work simultaneously
+→ Each commits on its own branch, coordinator creates PRs
 ```
 
-<details>
-<summary>Troubleshooting: viban command not found</summary>
+### `/viban:setup` — Install and configure
 
-Add npm global bin to your PATH:
-```bash
-# For zsh
-echo 'export PATH="$PATH:$(npm config get prefix)/bin"' >> ~/.zshrc && source ~/.zshrc
+Installs dependencies, detects your project conventions, and generates a workflow file.
 
-# For bash
-echo 'export PATH="$PATH:$(npm config get prefix)/bin"' >> ~/.bashrc && source ~/.bashrc
-```
-</details>
-
-## Usage
-
-### TUI (Interactive Mode)
+## TUI
 
 ```bash
-viban           # Launch TUI
+viban    # Launch interactive board
 ```
 
-**Navigation:**
+3-column Kanban board (backlog → in_progress → review). Completed issues move to history.
 
 | Level | Screen | Controls |
 |-------|--------|----------|
@@ -137,81 +153,69 @@ viban           # Launch TUI
 | 2 | Card List | ↑↓ select, Enter for details, `a` to add |
 | 3 | Card Details | Change status, delete |
 
-**TUI Features:**
-- Navigate between backlog, in_progress, review, done columns
-- View issue cards with priority and type badges
-- Create new issues with rich descriptions
-- Move issues between statuses
-- Delete issues
-
-### CLI Commands
+## CLI Reference
 
 ```bash
-# Board & Listing
-viban list                                          # Display kanban board
-viban list [--status <s>] [--priority P0,P1] [--type bug] [--search text]
-viban history                                       # Show completed issues
-viban stats                                         # Throughput metrics and statistics
-viban export [md|html]                              # Export board as markdown or HTML
+# Board
+viban list                                          # Show board
+viban list --status backlog --priority P0,P1        # Filter
+viban list --type bug --search "auth"               # Search
+viban history                                       # Completed issues
+viban stats                                         # Throughput metrics
+viban export [md|html]                              # Export board
 
-# Issue Management
-viban add "Title" ["Desc"] [P0-P3] [type] [--parent <id>]  # Create issue
-viban edit <id>                                     # Edit issue in editor
-viban get <id>                                      # Get issue details (JSON)
-viban priority <id> <P0-P3>                         # Set priority
-viban attach <id> <file1> [file2...]                # Attach files to issue
-viban comment <id> "msg"                            # Add comment to issue
+# Issues
+viban add "Title" ["Desc"] [P0-P3] [type] [--parent <id>]
+viban edit <id>                                     # Edit in editor
+viban get <id>                                      # JSON details
+viban priority <id> <P0-P3>
+viban comment <id> "msg"
+viban attach <id> <file1> [file2...]
 
 # Workflow
-viban assign                                        # Assign top backlog issue
-viban review [id]                                   # Move issue to review
-viban move <id> <status>                            # Move to any status
-viban done <id> [--purge] [--dry-run]               # Complete (--purge to delete)
+viban assign                                        # Assign top backlog
+viban review [id]                                   # → review
+viban move <id> <status>                            # → any status
+viban done <id> [--purge] [--dry-run]               # → done
 
-# Dependencies & Sub-tasks
-viban link <id> blocks <id>                         # Add dependency
-viban unlink <id> blocks <id> [--dry-run]           # Remove dependency
+# Dependencies
+viban link <id> blocks <id>
+viban unlink <id> blocks <id> [--dry-run]
 
-# Sync & Maintenance
-viban sync                                          # Sync with GitHub Issues
-viban backup                                        # Snapshot viban.json
-viban restore [filename]                            # List or restore a backup
-viban changelog [range]                             # Generate changelog from commits
-viban migrate                                       # Migrate: extract type from title
-viban update                                        # Update to latest version
+# Maintenance
+viban sync                                          # GitHub sync
+viban backup / viban restore [file]
+viban changelog [range]
+viban update
 ```
 
-**Examples:**
+<details>
+<summary><strong>GitHub Issues Sync</strong></summary>
+
+Two-way sync with GitHub Issues. Comments, dependencies, and sub-tasks are synced.
 
 ```bash
-# Add a high-priority bug
-viban add "Fix login error" "Users cannot login after password reset" P1 bug
-
-# Add a sub-task under issue #5
-viban add "Implement auth middleware" --parent 5
-
-# Add a comment to track progress
-viban comment 3 "Investigated root cause: null pointer in auth handler"
-
-# Block issue #4 until issue #3 is done
-viban link 3 blocks 4
-
-# Filter issues
-viban list --priority P0,P1                  # Show critical and high priority
-viban list --type bug --status backlog       # Show backlog bugs
-viban list --search "auth"                   # Search by text
-
-# Preview before deleting
-viban done 5 --purge --dry-run
-
-# Export board for a PR description
-viban export md > board.md
-
-# Generate changelog for a release
-viban changelog v1.3.11..v1.3.12
+viban sync --init       # Initialize (auto-detects from git remote)
+viban sync --dry-run    # Preview changes
+viban sync              # Pull + push
+viban sync --push-new   # Push local-only issues to GitHub
 ```
 
-### Issue Templates
+**Status mapping:**
+
+| viban | GitHub |
+|-------|--------|
+| `backlog` | *(no label)* |
+| `in_progress` | `in-progress` |
+| `review` | `review` |
+| `done` | *(issue closed)* |
+
+Requires [gh CLI](https://cli.github.com/) authenticated with `gh auth login`.
+
+</details>
+
+<details>
+<summary><strong>Issue Templates</strong></summary>
 
 Create `.viban/templates.json` to define defaults per issue type:
 
@@ -228,145 +232,36 @@ Create `.viban/templates.json` to define defaults per issue type:
 }
 ```
 
-When creating an issue with a matching type, unset fields are filled from the template:
-```bash
-viban add "Login crash" --type bug
-# Priority defaults to P1, description defaults to bug template
-```
+Unset fields are filled from the template when the type matches.
 
-### Claude Code Integration
+</details>
 
-viban provides skills and commands for automated issue management in Claude Code:
+<details>
+<summary><strong>Configuration</strong></summary>
 
-#### `/viban:add` - Register structured issue
+### Data Location
 
-Analyzes a problem and creates a properly structured viban issue:
+| Priority | Location | When |
+|----------|----------|------|
+| 1 | `$VIBAN_DATA_DIR` | Explicit override |
+| 2 | `.viban/` | Default |
 
-1. Clarifies the problem if vague
-2. Infers priority and type from description
-3. Registers with proper title, description, priority, type
-4. Optionally enters plan mode to design a solution
+Auto-migrates from legacy `.git/` location.
 
-**Use cases:**
-- Bug reporting
-- Feature requests
-- Converting free-form descriptions to structured issues
+### Priority Levels
 
-#### `/viban:assign` - Assign next backlog issue
+| Priority | Description |
+|----------|-------------|
+| **P0** | Critical — blocks all work |
+| **P1** | High — must do soon |
+| **P2** | Medium — normal priority |
+| **P3** | Low — nice to have |
 
-Picks the highest priority backlog issue and assigns it to the current session:
+### Type Tags
 
-1. Assigns top backlog issue (skips blocked issues)
-2. Evaluates description clarity
-3. If unclear, interviews user and enriches the issue description
+`bug` · `feat` · `refactor` · `chore`
 
-This command is **assignment only** - it does not start implementation. Use your project's workflow (`.viban/workflow.md`) to define what happens next.
-
-#### `/viban:parallel-assign` - Parallel resolution with worktrees
-
-Resolves multiple backlog issues simultaneously using isolated git worktrees:
-
-1. Assigns N issues (default: 3, max: 5) and creates worktrees
-2. Spawns one opus agent per issue in its own worktree
-3. Each agent analyzes, implements, commits, and creates a PR
-4. Coordinator collects results, runs tests, and cleans up
-
-**Use cases:**
-- Batch processing a backlog
-- Parallel agent workflows with zero interference
-- Rapid issue throughput
-
-#### `/viban:setup` - Install & configure
-
-Installs all dependencies and optionally configures a project workflow:
-
-1. Detects OS and installs missing dependencies (zsh, gum, jq)
-2. Installs/updates viban CLI via npm
-3. Auto-detects project conventions (build/test, commit style, branch naming)
-4. Interviews for workflow preferences (pipeline depth, issue numbering)
-5. Generates `.viban/workflow.md` for `/viban:assign` to follow
-
-## External Tracker Sync
-
-viban can sync two-way with external issue trackers. Currently supported: **GitHub Issues**.
-
-### Quick Start
-
-```bash
-# First time: initialize sync (auto-detects provider from git remote)
-viban sync --init
-
-# Preview what will change
-viban sync --dry-run
-
-# Run sync
-viban sync
-
-# Push local-only issues to GitHub
-viban sync --push-new
-```
-
-> **Tip:** Use `viban sync --dry-run` first to preview changes before syncing.
-
-### How It Works
-
-- **First sync** imports all open remote issues as backlog cards with external IDs (e.g. `github:42`)
-- **Subsequent syncs** pull remote changes and push local status updates
-- **New local cards** are NOT pushed unless `--push-new` is specified (local-first default)
-- **Conflicts** (both sides changed) resolve to remote-wins by default
-- **Comments** are pushed from viban to GitHub (tracked to avoid duplicates)
-- **Dependencies** (`blocked_by`) and **sub-tasks** are rendered in the GitHub issue body
-
-### Status-to-Label Mapping
-
-| viban status | GitHub label |
-|-------------|-------------|
-| `backlog` | *(no label)* |
-| `in_progress` | `in-progress` |
-| `review` | `review` |
-| `done` | *(issue closed)* |
-
-### Requirements
-
-- [gh CLI](https://cli.github.com/) installed and authenticated (`gh auth login`)
-- Repository must have a GitHub remote
-
-## Configuration
-
-### Data Location (viban.json)
-
-viban stores issues in `viban.json` with the following priority:
-
-| Priority | Location | When Used |
-|----------|----------|-----------|
-| 1 | `$VIBAN_DATA_DIR` | Explicit override via environment variable |
-| 2 | `.viban/` | Default (all projects) |
-
-**Auto-Migration:** If viban detects `viban.json` or `sync.json` in `.git/` (legacy location), it automatically moves them to `.viban/`.
-
-**For Any Project:**
-```bash
-# viban will automatically create .viban/viban.json in current directory
-cd /path/to/project
-viban add "First issue" "Description" P2 feat
-# Creates: /path/to/project/.viban/viban.json
-```
-
-**Custom Data Directory:**
-```bash
-export VIBAN_DATA_DIR="/path/to/shared/data"
-viban list  # Uses /path/to/shared/data/viban.json
-```
-
-### Auto-Initialization
-
-viban automatically initializes when first used:
-- Creates data directory if not exists
-- Creates `viban.json` with empty issue list
-- Validates JSON structure on load (version, issues array, required fields)
-- No manual setup required
-
-### Issue Status Flow
+### Status Flow
 
 ```
 backlog → in_progress → review → done
@@ -375,25 +270,10 @@ backlog → in_progress → review → done
         (viban move)
 ```
 
-### Priority Levels
+</details>
 
-| Priority | Description |
-|----------|-------------|
-| **P0** | Critical - blocks all work |
-| **P1** | High - must do soon |
-| **P2** | Medium - normal priority |
-| **P3** | Low - nice to have |
-
-### Type Tags
-
-| Type | Use Case |
-|------|----------|
-| **bug** | Fixing broken functionality |
-| **feat** | New feature or enhancement |
-| **refactor** | Code restructuring |
-| **chore** | Maintenance tasks |
-
-## Data Structure
+<details>
+<summary><strong>Data Structure</strong></summary>
 
 Issues are stored in `.viban/viban.json`:
 
@@ -423,124 +303,36 @@ Issues are stored in `.viban/viban.json`:
 }
 ```
 
-## Parallel Session Handling
+</details>
 
-Multiple Claude Code sessions can work simultaneously:
+## Requirements
 
-1. Each session calls `/viban:assign`
-2. Session ID is recorded in `assigned_to` field
-3. Other sessions skip already-assigned and blocked issues
-4. Completion moves issue to `review` or `done`
-
-This prevents duplicate work and enables parallel agent workflows.
-
-## File Structure
-
-```
-claude-plugin-viban/
-├── .claude-plugin/
-│   └── plugin.json              # Plugin metadata
-├── .github/
-│   └── workflows/
-│       ├── ci.yml               # CI testing + shellcheck linting
-│       └── release.yml          # NPM publishing
-├── bin/
-│   └── viban                    # Main entry point (dispatch + init)
-├── lib/
-│   ├── config.zsh               # Colors, labels, borders, ANSI codes
-│   ├── helpers.zsh              # Data ops, sorting, JSON validation
-│   ├── tui.zsh                  # TUI rendering, coprocess, editor
-│   └── commands.zsh             # All cmd_* CLI command implementations
-├── commands/
-│   ├── add.md                   # /viban:add command
-│   ├── assign.md                # /viban:assign command
-│   ├── parallel-assign.md       # /viban:parallel-assign command
-│   └── setup.md                 # /viban:setup command
-├── skills/
-│   ├── add/SKILL.md             # /viban:add skill
-│   ├── assign/SKILL.md          # /viban:assign skill
-│   ├── parallel-assign/SKILL.md # /viban:parallel-assign skill
-│   └── setup/SKILL.md           # /viban:setup skill
-├── scripts/
-│   ├── check-deps.sh            # Dependency checker
-│   ├── generate-release-notes.sh # Release notes generator
-│   ├── sync.sh                  # Core sync engine (provider-agnostic)
-│   ├── sync_create.sh           # Auto-create remote issue on add
-│   ├── providers/
-│   │   └── github.sh            # GitHub Issues provider
-│   └── tui_coprocess.py         # Python coprocess for Unicode width
-├── tests/                       # 19 test suites, 212 tests
-│   ├── run_all.zsh              # Test runner
-│   ├── test_cmd_add.zsh         # Add command tests
-│   ├── test_cmd_add_dup.zsh     # Duplicate detection tests
-│   ├── test_cmd_backup.zsh      # Backup/restore tests
-│   ├── test_cmd_comment.zsh     # Comment tests
-│   ├── test_cmd_done.zsh        # Done/archive tests
-│   ├── test_cmd_history.zsh     # History/archive tests
-│   ├── test_cmd_link.zsh        # Dependency link/unlink tests
-│   ├── test_cmd_move.zsh        # Status move tests
-│   ├── test_cmd_stats.zsh       # Statistics tests
-│   ├── test_cmd_subtask.zsh     # Sub-task tests
-│   ├── test_coprocess.zsh       # Python coprocess tests
-│   ├── test_install.zsh         # Installation tests
-│   ├── test_integration.zsh     # Cross-feature integration tests
-│   ├── test_layout.zsh          # TUI layout tests
-│   ├── test_pad_width.zsh       # Unicode width tests
-│   ├── test_sort_order.zsh      # Sort order tests
-│   ├── test_sync.zsh            # Sync engine tests
-│   ├── test_sync_auto.zsh       # Auto-sync tests
-│   └── test_sync_fields.zsh     # Sync new fields tests
-├── docs/
-│   ├── CLAUDE.md                # Claude Code integration guide
-│   └── release.md               # Release workflow
-├── LICENSE                      # MIT License
-├── package.json                 # NPM package config
-└── README.md                    # This file
-```
+- zsh
+- python3 (macOS/Linux built-in)
+- [gum](https://github.com/charmbracelet/gum)
+- [jq](https://jqlang.github.io/jq/)
+- [gh](https://cli.github.com/) (optional, for GitHub sync)
 
 ## Development
 
-### Running Tests
-
 ```bash
-# Install dependencies
 brew install gum jq
-
-# Run the full test suite (19 suites, 212 tests)
-zsh tests/run_all.zsh
+zsh tests/run_all.zsh    # 19 suites, 212 tests
 ```
 
-### Publishing
-
-See [docs/release.md](docs/release.md) for the full release workflow.
-
-```bash
-# GitHub Actions will automatically publish to npm on tag push
-```
+See [docs/release.md](docs/release.md) for publishing.
 
 ## Contributing
 
-Contributions are welcome! Please:
-
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Commit your changes
+4. Open a Pull Request
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-## Author
-
-**happy-nut**
-
-- GitHub: [@happy-nut](https://github.com/happy-nut)
-- Repository: [claude-plugin-viban](https://github.com/happy-nut/claude-plugin-viban)
+MIT — see [LICENSE](LICENSE).
 
 ## Links
 
-- [npm package](https://www.npmjs.com/package/claude-plugin-viban)
-- [Documentation](https://github.com/happy-nut/claude-plugin-viban/tree/main/docs)
-- [Issues](https://github.com/happy-nut/claude-plugin-viban/issues)
+- [npm](https://www.npmjs.com/package/claude-plugin-viban) · [Issues](https://github.com/happy-nut/claude-plugin-viban/issues) · [Docs](https://github.com/happy-nut/claude-plugin-viban/tree/main/docs)
