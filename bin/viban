@@ -1601,6 +1601,26 @@ cmd_move() {
     echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → $new_status"
 }
 
+cmd_comment() {
+    init_json
+    [[ -z "$1" || -z "$2" ]] && { echo "Usage: viban comment <id> \"message\""; exit 1; }
+    local id="$1"
+    shift
+    local message="$*"
+
+    # Verify issue exists
+    local exists=$(jq -r --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)|.id//empty' "$VIBAN_JSON")
+    [[ -z "$exists" ]] && { echo "Error: Issue #$id not found"; exit 1; }
+
+    local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    jq --argjson id "$id" --arg msg "$message" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {comments:((.comments // []) + [{text:$msg,created_at:$now}]),updated_at:$now}' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    local count=$(jq -r --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)|.comments|length' "$VIBAN_JSON")
+    echo "✓ comment #$count added to $(display_id "$id" "$(get_ext_id "$id")")"
+}
+
 cmd_get() { init_json; jq --argjson id "$1" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON"; }
 
 cmd_attach() {
@@ -1722,6 +1742,7 @@ main() {
         done)   cmd_done "$2" "$3";;
         move)   cmd_move "$2" "$3";;
         get)    cmd_get "$2";;
+        comment) shift; cmd_comment "$@";;
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
         migrate) cmd_migrate;;
@@ -1755,6 +1776,7 @@ main() {
             echo "  viban review      → Human Review"
             echo "  viban move <id> <status>     Move to status (backlog,in_progress,review,done)"
             echo "  viban done <id> [--remove]   Complete (--remove to delete)"
+            echo "  viban comment <id> \"msg\"  Add comment to task"
             echo "  viban edit <id>   Edit task in editor"
             echo "  viban get <id>    Get task details (JSON)"
             echo "  viban migrate     Migrate: extract type from title"
