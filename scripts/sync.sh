@@ -238,7 +238,7 @@ sync_pull() {
             # New remote issue -> import (skip already-closed issues)
             if [[ "$status" == "done" ]]; then
                 echo "  == ${ext_id} \"${title}\" (closed, skipped)"
-                ((unchanged++))
+                ((unchanged++)) || true
                 continue
             fi
             if [[ "$dry_run" == "true" ]]; then
@@ -273,7 +273,7 @@ sync_pull() {
                 set_issue_meta "$viban_id" "$remote_id" "$remote_updated" "$now"
                 echo "  <- ${ext_id} \"${title}\" (new card created)"
             fi
-            ((pulled++))
+            ((pulled++)) || true
         else
             # Existing card - check for changes
             local viban_id viban_updated
@@ -294,7 +294,7 @@ sync_pull() {
                     write_sync_meta "$meta_tmp"
                     echo "  <- ${ext_id} \"${title}\" (closed remotely, card removed)"
                 fi
-                ((pulled++))
+                ((pulled++)) || true
                 continue
             fi
 
@@ -306,7 +306,7 @@ sync_pull() {
                 # First time seeing this linked card in sync - record and skip
                 set_issue_meta "$viban_id" "$remote_id" "$remote_updated" "$viban_updated"
                 echo "  == ${ext_id} \"${title}\" (tracking started)"
-                ((unchanged++))
+                ((unchanged++)) || true
                 continue
             fi
 
@@ -320,7 +320,7 @@ sync_pull() {
 
             if [[ "$remote_changed" == "false" && "$viban_changed" == "false" ]]; then
                 echo "  == ${ext_id} \"${title}\" (no changes)"
-                ((unchanged++))
+                ((unchanged++)) || true
             elif [[ "$remote_changed" == "true" && "$viban_changed" == "false" ]]; then
                 # Only remote changed -> pull
                 if [[ "$dry_run" == "true" ]]; then
@@ -343,11 +343,11 @@ sync_pull() {
                     set_issue_meta "$viban_id" "$remote_id" "$remote_updated" "$now"
                     echo "  <- ${ext_id} \"${title}\" (pulled remote changes)"
                 fi
-                ((updated++))
+                ((updated++)) || true
             elif [[ "$remote_changed" == "false" && "$viban_changed" == "true" ]]; then
                 # Only viban changed -> will be handled in push phase
                 echo "  == ${ext_id} \"${title}\" (local changes, will push)"
-                ((unchanged++))
+                ((unchanged++)) || true
             else
                 # Both changed -> conflict resolution (remote wins by default)
                 if [[ "$dry_run" == "true" ]]; then
@@ -370,7 +370,7 @@ sync_pull() {
                     set_issue_meta "$viban_id" "$remote_id" "$remote_updated" "$now"
                     echo "  !! ${ext_id} \"${title}\" (conflict: remote wins)"
                 fi
-                ((pulled++))
+                ((pulled++)) || true
             fi
         fi
     done
@@ -414,7 +414,7 @@ sync_push() {
         local meta
         meta=$(get_issue_meta "$viban_id")
         if [[ -z "$meta" ]]; then
-            ((unchanged++))
+            ((unchanged++)) || true
             continue
         fi
 
@@ -422,14 +422,14 @@ sync_push() {
         last_viban_updated=$(echo "$meta" | jq -r '.viban_updated_at')
 
         if [[ "$viban_updated" == "$last_viban_updated" ]]; then
-            ((unchanged++))
+            ((unchanged++)) || true
             continue
         fi
 
         # Viban card changed since last sync -> push
         if [[ "$dry_run" == "true" ]]; then
             echo "  -> ${ext_id} \"${title}\" (will push local changes)"
-            ((pushed++))
+            ((pushed++)) || true
         else
             local enriched_body
             enriched_body=$(build_enriched_body "$viban_id")
@@ -451,7 +451,7 @@ sync_push() {
 
             set_issue_meta "$viban_id" "$remote_id" "$remote_updated" "$viban_updated"
             echo "  -> ${ext_id} \"${title}\" (pushed)"
-            ((pushed++))
+            ((pushed++)) || true
         fi
     done
 
@@ -475,7 +475,7 @@ sync_push() {
 
             if [[ "$dry_run" == "true" ]]; then
                 echo "  -> (new) #${viban_id} \"${title}\" (will create remote issue)"
-                ((pushed++))
+                ((pushed++)) || true
             else
                 local new_remote_id
                 local enriched_body
@@ -504,7 +504,7 @@ sync_push() {
                 # Push comments for newly created issue
                 push_new_comments "$repo" "$new_remote_id" "$viban_id" "$card"
                 echo "  -> ${ext_id} #${viban_id} \"${title}\" (created remote issue)"
-                ((pushed++))
+                ((pushed++)) || true
             fi
         done
     fi
