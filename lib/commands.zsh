@@ -553,3 +553,77 @@ cmd_restore() {
         echo "Usage: viban restore <filename>"
     fi
 }
+
+cmd_changelog() {
+    local range="$1"
+
+    # Determine commit range
+    if [[ -z "$range" ]]; then
+        # Default: from last tag to HEAD
+        local last_tag=$(git describe --tags --abbrev=0 2>/dev/null)
+        if [[ -n "$last_tag" ]]; then
+            range="${last_tag}..HEAD"
+        else
+            range=""
+        fi
+    fi
+
+    # Get commits
+    local log_output
+    if [[ -n "$range" ]]; then
+        log_output=$(git log "$range" --pretty=format:"%s" 2>/dev/null)
+    else
+        log_output=$(git log --pretty=format:"%s" 2>/dev/null)
+    fi
+
+    if [[ -z "$log_output" ]]; then
+        echo "No commits found${range:+ in $range}"
+        return 0
+    fi
+
+    # Group by type
+    local -a feats fixes refactors chores others
+    while IFS= read -r line; do
+        case "$line" in
+            feat:*|feat\(*) feats+=("${line#*: }");;
+            fix:*|fix\(*)   fixes+=("${line#*: }");;
+            refactor:*|refactor\(*) refactors+=("${line#*: }");;
+            chore:*|chore\(*) chores+=("${line#*: }");;
+            test:*|test\(*) chores+=("${line#*: }");;
+            docs:*|docs\(*) chores+=("${line#*: }");;
+            Merge\ pull*|Merge\ branch*) ;;  # skip merge commits
+            [0-9]*) ;;  # skip version-only commits like "1.3.12"
+            *) others+=("$line");;
+        esac
+    done <<< "$log_output"
+
+    # Output markdown
+    echo "# Changelog${range:+ ($range)}"
+    echo ""
+
+    if (( ${#feats[@]} > 0 )); then
+        echo "## Features"
+        for item in "${feats[@]}"; do echo "- $item"; done
+        echo ""
+    fi
+    if (( ${#fixes[@]} > 0 )); then
+        echo "## Bug Fixes"
+        for item in "${fixes[@]}"; do echo "- $item"; done
+        echo ""
+    fi
+    if (( ${#refactors[@]} > 0 )); then
+        echo "## Refactors"
+        for item in "${refactors[@]}"; do echo "- $item"; done
+        echo ""
+    fi
+    if (( ${#chores[@]} > 0 )); then
+        echo "## Chores"
+        for item in "${chores[@]}"; do echo "- $item"; done
+        echo ""
+    fi
+    if (( ${#others[@]} > 0 )); then
+        echo "## Other"
+        for item in "${others[@]}"; do echo "- $item"; done
+        echo ""
+    fi
+}
