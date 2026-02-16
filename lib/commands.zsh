@@ -581,6 +581,66 @@ cmd_restore() {
     fi
 }
 
+cmd_export() {
+    init_json
+    local format="${1:-md}"
+
+    case "$format" in
+        md|markdown)
+            echo "# Viban Board"
+            echo ""
+            local status_label
+            for st in backlog in_progress review done; do
+                local count=$(jq --arg s "$st" '[.issues[]|select(.status==$s)]|length' "$VIBAN_JSON")
+                [[ "$count" -eq 0 ]] && continue
+                case "$st" in
+                    backlog) status_label="Backlog";;
+                    in_progress) status_label="In Progress";;
+                    review) status_label="Review";;
+                    done) status_label="Done";;
+                esac
+                echo "## $status_label ($count)"
+                echo ""
+                echo "| ID | Priority | Type | Title |"
+                echo "|---|---|---|---|"
+                jq -r --arg s "$st" '
+                    .issues | map(select(.status==$s)) |
+                    sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end) |
+                    .[] | "| #\(.id) | \(.priority // "P3") | \(.type // "-") | \(.title) |"
+                ' "$VIBAN_JSON"
+                echo ""
+            done
+            ;;
+        html)
+            echo "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Viban Board</title>"
+            echo "<style>body{font-family:system-ui;max-width:900px;margin:2em auto;padding:0 1em}"
+            echo "table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid #ddd;padding:8px;text-align:left}"
+            echo "th{background:#f5f5f5}h2{margin-top:1.5em}.P0{color:#d00}.P1{color:#e60}.P2{color:#c90}.P3{color:#090}</style></head><body>"
+            echo "<h1>Viban Board</h1>"
+            for st in backlog in_progress review done; do
+                local count=$(jq --arg s "$st" '[.issues[]|select(.status==$s)]|length' "$VIBAN_JSON")
+                [[ "$count" -eq 0 ]] && continue
+                case "$st" in
+                    backlog) status_label="Backlog";;
+                    in_progress) status_label="In Progress";;
+                    review) status_label="Review";;
+                    done) status_label="Done";;
+                esac
+                echo "<h2>$status_label ($count)</h2>"
+                echo "<table><tr><th>ID</th><th>Priority</th><th>Type</th><th>Title</th></tr>"
+                jq -r --arg s "$st" '
+                    .issues | map(select(.status==$s)) |
+                    sort_by(if .order != null then [0, .order] else [1, ({"P0":0,"P1":1,"P2":2,"P3":3}[.priority // "P3"] // 3), .id] end) |
+                    .[] | "<tr><td>#\(.id)</td><td class=\"\(.priority // "P3")\">\(.priority // "P3")</td><td>\(.type // "-")</td><td>\(.title)</td></tr>"
+                ' "$VIBAN_JSON"
+                echo "</table>"
+            done
+            echo "</body></html>"
+            ;;
+        *) echo "Usage: viban export [md|html]"; exit 1;;
+    esac
+}
+
 cmd_changelog() {
     local range="$1"
 

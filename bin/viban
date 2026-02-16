@@ -228,6 +228,7 @@ main() {
         backup)  cmd_backup;;
         restore) shift; cmd_restore "$@";;
         changelog) cmd_changelog "$2";;
+        export)  cmd_export "$2";;
         migrate) cmd_migrate;;
         sync)   shift; cmd_sync "$@";;
         --version|-v)
@@ -270,6 +271,7 @@ main() {
             echo "  viban backup      Snapshot viban.json to backups/"
             echo "  viban restore [f] List or restore a backup"
             echo "  viban changelog [range]  Generate changelog from commits"
+            echo "  viban export [md|html]   Export board as markdown or HTML"
             echo "  viban migrate     Migrate: extract type from title"
             echo "  viban sync        Sync with external issue tracker (GitHub, etc.)"
             echo "  viban update      Update to latest version (if available)"
