@@ -253,7 +253,7 @@ main() {
             echo ""
             echo "  viban             TUI"
             echo "  viban list        Show board"
-            echo "  viban list --status <s>  Filter by status"
+            echo "  viban list [--status <s>] [--priority P0,P1] [--type bug] [--search text]"
             echo "  viban history     Show completed issues"
             echo "  viban add \"title\" [\"desc\"] [P0-P3] [type] [--parent <id>]  Add task"
             echo "  viban attach <id> <file1> [file2...]  Attach files to task"

@@ -2,14 +2,45 @@
 cmd_list() {
     init_json
     local _done_ids=$(jq '[.issues[]|select(.status=="done")|.id]' "$VIBAN_JSON")
-    local filter_status=""
-    [[ "$1" == "--status" && -n "$2" ]] && filter_status="$2"
+    local filter_status="" filter_priority="" filter_type="" filter_search=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --status)   filter_status="$2"; shift 2;;
+            --priority) filter_priority="$2"; shift 2;;
+            --type)     filter_type="$2"; shift 2;;
+            --search)   filter_search="$2"; shift 2;;
+            *) shift;;
+        esac
+    done
+
+    local has_filter=false
+    [[ -n "$filter_status" || -n "$filter_priority" || -n "$filter_type" || -n "$filter_search" ]] && has_filter=true
 
     echo ""
-    if [[ -n "$filter_status" ]]; then
-        local count=$(jq -r --arg s "$filter_status" '[.issues[]|select(.status==$s)]|length' "$VIBAN_JSON")
-        echo "● $filter_status ($count)"
-        jq -r --arg s "$filter_status" --argjson done "$_done_ids" '.issues|map(select(.status==$s))|sort_by(.updated_at)|reverse|.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end)\(if ((.blocked_by // []) | length > 0 and any(. as $b | $done | index($b) == null)) then " [BLOCKED]" else "" end) \(.title)"' "$VIBAN_JSON"
+    if $has_filter; then
+        # Build jq filter expression
+        local jq_filter='.issues | map(select(1==1'
+        [[ -n "$filter_status" ]] && jq_filter+=' and .status==$fst'
+        [[ -n "$filter_priority" ]] && jq_filter+=' and ([.priority // "P3"] | inside($fpr | split(",")))'
+        [[ -n "$filter_type" ]] && jq_filter+=' and ([.type // ""] | inside($fty | split(",")))'
+        [[ -n "$filter_search" ]] && jq_filter+=' and ((.title | ascii_downcase | contains($fsrc)) or ((.description // "") | ascii_downcase | contains($fsrc)))'
+        jq_filter+='))'
+
+        local count
+        count=$(jq -r --arg fst "$filter_status" --arg fpr "$filter_priority" --arg fty "$filter_type" --arg fsrc "${(L)filter_search}" \
+            "$jq_filter | length" "$VIBAN_JSON")
+
+        local label_parts=()
+        [[ -n "$filter_status" ]] && label_parts+=("status=$filter_status")
+        [[ -n "$filter_priority" ]] && label_parts+=("priority=$filter_priority")
+        [[ -n "$filter_type" ]] && label_parts+=("type=$filter_type")
+        [[ -n "$filter_search" ]] && label_parts+=("search=\"$filter_search\"")
+        echo "● Filtered: ${(j:, :)label_parts} ($count)"
+
+        jq -r --arg fst "$filter_status" --arg fpr "$filter_priority" --arg fty "$filter_type" --arg fsrc "${(L)filter_search}" --argjson done "$_done_ids" \
+            "$jq_filter | sort_by(.updated_at) | reverse | .[] |
+            \"  \(if .external_id then .external_id else \"#\\(.id)\" end) [\\(.priority // \"P3\")]\(if .type then \" [\\(.type | ascii_upcase)]\" else \"\" end)\(if ((.blocked_by // []) | length > 0 and any(. as \$b | \$done | index(\$b) == null)) then \" [BLOCKED]\" else \"\" end) \\(.title)\"" "$VIBAN_JSON"
         echo ""
     else
         for st in $VIBAN_STATUSES; do
