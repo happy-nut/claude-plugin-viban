@@ -210,10 +210,30 @@ cmd_review() {
 
 cmd_done() {
     init_json
-    [[ -z "$1" ]] && { echo "Usage: viban done <id> [--purge]"; exit 1; }
+    [[ -z "$1" ]] && { echo "Usage: viban done <id> [--purge] [--dry-run]"; exit 1; }
     local id="$1"
-    local remove=false
-    [[ "$2" == "--remove" || "$2" == "--purge" ]] && remove=true
+    local remove=false dry_run=false
+    shift
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --remove|--purge) remove=true; shift;;
+            --dry-run) dry_run=true; shift;;
+            *) shift;;
+        esac
+    done
+
+    if $dry_run; then
+        local title=$(jq -r --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)|.title//empty' "$VIBAN_JSON")
+        [[ -z "$title" ]] && { echo "Error: Issue #$id not found"; return 1; }
+        if $remove; then
+            echo "[dry-run] Would permanently delete #$id \"$title\""
+        else
+            echo "[dry-run] Would mark #$id \"$title\" as done"
+        fi
+        local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
+        [[ -d "$wt_dir" ]] && echo "[dry-run] Would remove worktree at $wt_dir"
+        return 0
+    fi
 
     # Cleanup worktree if exists
     local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -364,8 +384,15 @@ cmd_link() {
 
 cmd_unlink() {
     init_json
-    [[ -z "$1" || "$2" != "blocks" || -z "$3" ]] && { echo "Usage: viban unlink <id> blocks <id>"; exit 1; }
+    [[ -z "$1" || "$2" != "blocks" || -z "$3" ]] && { echo "Usage: viban unlink <id> blocks <id> [--dry-run]"; exit 1; }
     local blocker_id="$1" blocked_id="$3"
+    local dry_run=false
+    [[ "$4" == "--dry-run" ]] && dry_run=true
+
+    if $dry_run; then
+        echo "[dry-run] Would remove link: #$blocker_id blocks #$blocked_id"
+        return 0
+    fi
 
     local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     jq --argjson bid "$blocked_id" --argjson rid "$blocker_id" --arg now "$now" \

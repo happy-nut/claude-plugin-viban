@@ -216,12 +216,12 @@ main() {
         attach) shift; cmd_attach "$@";;
         assign) cmd_assign "$2";;
         review) cmd_review "$2";;
-        done)   cmd_done "$2" "$3";;
+        done)   shift; cmd_done "$@";;
         move)   cmd_move "$2" "$3";;
         get)    cmd_get "$2";;
         comment) shift; cmd_comment "$@";;
         link)   cmd_link "$2" "$3" "$4";;
-        unlink) cmd_unlink "$2" "$3" "$4";;
+        unlink) shift; cmd_unlink "$@";;
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
         stats)   cmd_stats;;
