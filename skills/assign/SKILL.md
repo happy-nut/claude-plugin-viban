@@ -45,33 +45,12 @@ viban get $ISSUE_ID
 
 Display the issue title, description, priority, and type to the user.
 
-## Step 3: Evaluate Clarity
+## Step 3: Evaluate Clarity → Proceed Immediately
 
-Assess whether the issue description provides enough context to start working:
+Assess whether the issue description provides enough context to start working.
 
-- **Clear**: the symptom, affected area, and expected behavior are all understandable
-- **Unclear**: vague description, missing context, ambiguous scope, or multiple possible interpretations
-
-### If Unclear
-
-Interview the user with AskUserQuestion to gather missing context. Ask about:
-- What specifically is the problem? (symptom)
-- Where does it happen? (location/trigger)
-- What is the expected behavior?
-- Any additional constraints or context?
-
-After gathering answers, update the issue description:
-
-```bash
-cat > /tmp/viban-desc-update.md <<'VIBAN_EOF'
-{original description}
-
-## Clarification
-{gathered context from interview}
-VIBAN_EOF
-
-# Re-add the issue with enriched description (edit via TUI or recreate)
-```
+- **Clear** → **proceed directly to Step 4. Do NOT ask the user for confirmation. Do NOT ask "should I start?". Just start.**
+- **Unclear** → interview the user with AskUserQuestion to gather missing context, then proceed to Step 4 immediately.
 
 ## Step 4: Execute Workflow
 
@@ -90,9 +69,7 @@ Follow the workflow from Step 0. If no workflow was found, use this default pipe
 - Run build and tests to confirm the fix works
 - Verify no regressions
 
-### 4.4 Ship (MANDATORY)
-
-Every step below is **required** unless the workflow explicitly says to stop earlier.
+### 4.4 Ship (MANDATORY — execute ALL 4 commands in sequence)
 
 ```bash
 # 1. Commit
@@ -102,7 +79,7 @@ git commit -m "fix: {description} (#$ISSUE_ID)"
 # 2. Push
 git push -u origin issue-$ISSUE_ID
 
-# 3. Create PR (REQUIRED — do NOT skip this)
+# 3. Create PR (REQUIRED — do NOT skip)
 gh pr create --title "fix: {description}" --body "Resolves #$ISSUE_ID
 
 ## Summary
@@ -110,19 +87,18 @@ gh pr create --title "fix: {description}" --body "Resolves #$ISSUE_ID
 
 ## Test plan
 {how it was verified}"
-```
 
-**If `gh pr create` fails**: fix the error and retry. Do NOT skip PR creation.
-
-## Step 5: Move to Review
-
-After PR is created:
-
-```bash
+# 4. Move to review (REQUIRED — do NOT skip)
 viban review $ISSUE_ID
 ```
 
-Report completion with the PR URL:
+**If any command fails**: fix the error and retry. Do NOT skip any step.
+
+### Completion Checklist (ALL must be true before you stop)
+
+- [ ] PR created (you have a PR URL)
+- [ ] `viban review` called (issue status is "review")
+- [ ] Completion message includes PR URL
 
 ```
 Issue #{id} resolved → review
@@ -130,7 +106,7 @@ Issue #{id} resolved → review
   PR: {pr_url}
 ```
 
-**Do NOT report completion without a PR URL.**
+**If you don't have a PR URL or haven't called `viban review`, you are NOT done. Go back and do it.**
 
 ---
 
