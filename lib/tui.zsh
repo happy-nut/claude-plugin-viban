@@ -797,6 +797,9 @@ edit_issue() {
     local priority=$(printf '%s' "$issue" | jq -r '.priority // "P3"')
     local issue_type=$(printf '%s' "$issue" | jq -r '.type // ""')
     local ext_id=$(printf '%s' "$issue" | jq -r '.external_id // ""')
+    local parent_id=$(printf '%s' "$issue" | jq -r '.parent_id // ""')
+    local blocked_by=$(printf '%s' "$issue" | jq -r '(.blocked_by // []) | if length > 0 then map(tostring) | join(", ") else "" end')
+    local comment_count=$(printf '%s' "$issue" | jq -r '(.comments // []) | length')
     local did; did=$(display_id "$id" "$ext_id")
 
     local tmpfile=$(mktemp)
@@ -808,6 +811,8 @@ edit_issue() {
 # ─────────────────────────────────────────────
 # Status: ${STATUS_LABEL[$ist]}
 # Created: ${created:0:10}
+$([ -n "$blocked_by" ] && echo "# Blocked by: #$blocked_by")
+$([ "$comment_count" -gt 0 ] 2>/dev/null && echo "# Comments: $comment_count (use 'viban comment' to add)")
 # ─────────────────────────────────────────────
 
 # ▼ Priority (P0=CRITICAL, P1=HIGH, P2=MEDIUM, P3=LOW)
@@ -815,6 +820,9 @@ $priority
 
 # ▼ Type (bug, feat, chore, refactor) - leave empty for none
 $issue_type
+
+# ▼ Parent ID (number or empty for none)
+$parent_id
 
 # ▼ Title (single line)
 $title
@@ -825,36 +833,40 @@ TEMPLATE
 
     $editor "$tmpfile"
 
-    # Parse: priority -> type -> title -> description
-    local new_priority="" new_type="" new_title="" new_desc="" parse_stage=0
+    # Parse: priority -> type -> parent_id -> title -> description
+    local new_priority="" new_type="" new_parent="" new_title="" new_desc="" parse_stage=0
     while IFS= read -r line; do
         [[ "$line" =~ ^#.*$ ]] && continue
         case $parse_stage in
             0)  # Looking for priority
                 [[ -z "$line" ]] && continue
-                # Validate priority format (P0-P3)
                 if [[ "$line" =~ ^P[0-3]$ ]]; then
                     new_priority="$line"
                 else
-                    new_priority="P3"  # Default if invalid
+                    new_priority="P3"
                 fi
                 parse_stage=1
                 ;;
             1)  # Looking for type
-                [[ -z "$line" ]] && continue  # Skip empty lines
-                # Validate type format (bug, feat, chore, refactor)
+                [[ -z "$line" ]] && continue
                 if [[ "$line" =~ ^(bug|feat|chore|refactor)$ ]]; then
                     new_type="$line"
                 fi
-                parse_stage=2  # Move to stage 2 on any non-empty line
+                parse_stage=2
                 ;;
-            2)  # Looking for title
+            2)  # Looking for parent_id
                 [[ -z "$line" ]] && continue
-                new_title="$line"
+                if [[ "$line" =~ ^[0-9]+$ ]]; then
+                    new_parent="$line"
+                fi
                 parse_stage=3
                 ;;
-            3)  # Collecting description
-                # Skip empty lines right after title
+            3)  # Looking for title
+                [[ -z "$line" ]] && continue
+                new_title="$line"
+                parse_stage=4
+                ;;
+            4)  # Collecting description
                 if [[ -z "$new_desc" && -z "$line" ]]; then
                     continue
                 fi
@@ -875,8 +887,8 @@ TEMPLATE
     local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local tmpjson=$(mktemp)
     printf '%s' "$new_desc" > "$tmpjson"
-    jq --argjson id "$id" --arg title "$new_title" --rawfile desc "$tmpjson" --arg priority "$new_priority" --arg issue_type "$new_type" --arg now "$now" \
-        '(.issues[]|select((.id|tonumber)==$id)) |= . + {title:$title,description:$desc,priority:$priority,type:(if $issue_type == "" then null else $issue_type end),updated_at:$now}' \
+    jq --argjson id "$id" --arg title "$new_title" --rawfile desc "$tmpjson" --arg priority "$new_priority" --arg issue_type "$new_type" --arg parent "$new_parent" --arg now "$now" \
+        '(.issues[]|select((.id|tonumber)==$id)) |= . + {title:$title,description:$desc,priority:$priority,type:(if $issue_type == "" then null else $issue_type end),parent_id:(if $parent == "" then null else ($parent|tonumber) end),updated_at:$now}' \
         "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
     rm -f "$tmpjson"
 }
