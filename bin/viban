@@ -1758,6 +1758,64 @@ cmd_unlink() {
     echo "✓ #$blocker_id no longer blocks #$blocked_id"
 }
 
+cmd_stats() {
+    init_json
+    local now_epoch=$(date +%s)
+    local week_ago_epoch=$((now_epoch - 604800))
+
+    # Total by status
+    echo ""
+    echo "Board Summary"
+    echo "─────────────"
+    local backlog_n=$(jq '[.issues[]|select(.status=="backlog")]|length' "$VIBAN_JSON")
+    local wip_n=$(jq '[.issues[]|select(.status=="in_progress")]|length' "$VIBAN_JSON")
+    local review_n=$(jq '[.issues[]|select(.status=="review")]|length' "$VIBAN_JSON")
+    local done_n=$(jq '[.issues[]|select(.status=="done")]|length' "$VIBAN_JSON")
+    local total_n=$(jq '.issues|length' "$VIBAN_JSON")
+    echo "  Backlog: $backlog_n  In Progress: $wip_n  Review: $review_n  Done: $done_n  Total: $total_n"
+
+    # P0/P1 open count
+    local p0_n=$(jq '[.issues[]|select(.status!="done" and .priority=="P0")]|length' "$VIBAN_JSON")
+    local p1_n=$(jq '[.issues[]|select(.status!="done" and .priority=="P1")]|length' "$VIBAN_JSON")
+    echo "  Open P0: $p0_n  Open P1: $p1_n"
+
+    # Issues added/closed this week
+    echo ""
+    echo "This Week (last 7 days)"
+    echo "───────────────────────"
+    local week_ago_iso=$(date -u -r $week_ago_epoch +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -d "@$week_ago_epoch" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
+    local added_week=$(jq -r --arg since "$week_ago_iso" '[.issues[]|select(.created_at >= $since)]|length' "$VIBAN_JSON")
+    local closed_week=$(jq -r --arg since "$week_ago_iso" '[.issues[]|select(.status=="done" and .updated_at >= $since)]|length' "$VIBAN_JSON")
+    echo "  Added: $added_week  Completed: $closed_week"
+
+    # Average cycle time (created_at → updated_at for done issues)
+    echo ""
+    echo "Cycle Time"
+    echo "──────────"
+    local avg_hours=$(jq -r '
+        [.issues[]|select(.status=="done")|
+            ((.updated_at|split("T")[0]|split("-")|map(tonumber)) as [$y2,$m2,$d2] |
+             (.created_at|split("T")[0]|split("-")|map(tonumber)) as [$y1,$m1,$d1] |
+             (($y2-$y1)*365 + ($m2-$m1)*30 + ($d2-$d1)) * 24)
+        ] | if length == 0 then null else (add / length | floor) end
+    ' "$VIBAN_JSON")
+    if [[ "$avg_hours" == "null" || -z "$avg_hours" ]]; then
+        echo "  Average: no completed issues"
+    elif [[ "$avg_hours" -lt 24 ]]; then
+        echo "  Average: <1 day"
+    else
+        echo "  Average: $((avg_hours / 24)) days"
+    fi
+
+    # Oldest open issue
+    echo ""
+    echo "Oldest Open Issue"
+    echo "─────────────────"
+    local oldest=$(jq -r '[.issues[]|select(.status!="done")]|sort_by(.created_at)|first|if . then "#\(.id) [\(.priority)] \(.title) (created \(.created_at|split("T")[0]))" else "none" end' "$VIBAN_JSON")
+    echo "  $oldest"
+    echo ""
+}
+
 cmd_migrate() {
     init_json
     echo "Migrating issues..."
@@ -1857,6 +1915,7 @@ main() {
         unlink) cmd_unlink "$2" "$3" "$4";;
         edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
         priority) cmd_priority "$2" "$3";;
+        stats)   cmd_stats;;
         migrate) cmd_migrate;;
         sync)   shift; cmd_sync "$@";;
         --version|-v)
@@ -1895,6 +1954,7 @@ main() {
             echo "  viban unlink <id> blocks <id>  Remove dependency"
             echo "  viban edit <id>   Edit task in editor"
             echo "  viban get <id>    Get task details (JSON)"
+            echo "  viban stats       Show throughput metrics and statistics"
             echo "  viban migrate     Migrate: extract type from title"
             echo "  viban sync        Sync with external issue tracker (GitHub, etc.)"
             echo "  viban update      Update to latest version (if available)"
