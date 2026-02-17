@@ -13,6 +13,13 @@ Parallel resolution of independent backlog issues via git worktrees.
 
 ---
 
+## Output Rules
+
+- **Do NOT output any preamble.** No "Your Task:", "I'll now...", "Let me...", or task summaries before starting work.
+- Start executing Phase 0 immediately and silently.
+
+---
+
 ## Phase 0: SETUP
 
 ### 0.1 Read Workflow

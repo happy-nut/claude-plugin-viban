@@ -11,6 +11,13 @@ Assign the first backlog issue and execute the full resolution workflow. If the 
 
 ---
 
+## Output Rules
+
+- **Do NOT output any preamble.** No "Your Task:", "I'll now...", "Let me...", or task summaries before starting work.
+- Start executing Step 0 immediately and silently.
+
+---
+
 ## Step 0: Read Workflow (CRITICAL)
 
 Check in priority order — first match wins:
