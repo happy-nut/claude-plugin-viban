@@ -218,10 +218,10 @@ main() {
         history) cmd_history;;
         add)    shift; _with_lock cmd_add "$@";;
         attach) shift; _with_lock cmd_attach "$@";;
-        assign) _with_lock cmd_assign "$2";;
-        review) _with_lock cmd_review "$2";;
+        assign) shift; _with_lock cmd_assign "$@";;
+        review) shift; _with_lock cmd_review "$@";;
         done)   shift; _with_lock cmd_done "$@";;
-        move)   _with_lock cmd_move "$2" "$3";;
+        move)   shift; _with_lock cmd_move "$@";;
         get)    cmd_get "$2";;
         comment) shift; _with_lock cmd_comment "$@";;
         link)   _with_lock cmd_link "$2" "$3" "$4";;

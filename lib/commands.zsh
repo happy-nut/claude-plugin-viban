@@ -217,7 +217,15 @@ cmd_add() {
 
 cmd_assign() {
     init_json
-    local session="${1:-$(echo $RANDOM | md5 | head -c 8)}"
+    local json_mode=false
+    local session=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --json) json_mode=true; shift;;
+            *) [[ -z "$session" ]] && session="$1"; shift;;
+        esac
+    done
+    [[ -z "$session" ]] && session="$(echo $RANDOM | md5 | head -c 8)"
     local done_ids=$(jq '[.issues[]|select(.status=="done")|.id]' "$VIBAN_JSON")
     local issue=$(jq -r --argjson done "$done_ids" '
         .issues|map(select(.status=="backlog"))|map(select(
@@ -236,13 +244,27 @@ cmd_assign() {
     local did; did=$(display_id "$id" "$ext_id")
     printf '\033]1;%s\007' "$did"
 
-    echo "✓ $did assigned"
-    echo "$id"
+    if $json_mode; then
+        echo "✓ $did assigned" >&2
+        jq -n --argjson id "$id" --arg title "$(printf '%s' "$issue" | jq -r '.title')" \
+            '{id:$id,status:"in_progress",title:$title}'
+    else
+        echo "✓ $did assigned"
+        echo "$id"
+    fi
 }
 
 cmd_review() {
     init_json
-    local id="${1:-$(jq -r '.issues|map(select(.status=="in_progress"))|first|.id//empty' "$VIBAN_JSON")}"
+    local json_mode=false
+    local id=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --json) json_mode=true; shift;;
+            *) [[ -z "$id" ]] && id="$1"; shift;;
+        esac
+    done
+    [[ -z "$id" ]] && id="$(jq -r '.issues|map(select(.status=="in_progress"))|first|.id//empty' "$VIBAN_JSON")"
     [[ -z "$id" ]] && { echo "None"; exit 1; }
     local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     jq --argjson id "$id" --arg now "$now" \
@@ -252,20 +274,26 @@ cmd_review() {
     # Clear iTerm2 session name
     printf '\033]1;\007'
 
-    echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → review"
+    if $json_mode; then
+        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → review" >&2
+        jq -n --argjson id "$id" '{id:$id,status:"review"}'
+    else
+        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → review"
+    fi
 }
 
 cmd_done() {
     init_json
     [[ -z "$1" ]] && { echo "Usage: viban done <id> [--purge] [--dry-run] [--force]"; exit 1; }
     local id="$1"
-    local remove=false dry_run=false force=false
+    local remove=false dry_run=false force=false json_mode=false
     shift
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --remove|--purge) remove=true; shift;;
             --dry-run) dry_run=true; shift;;
             --force) force=true; shift;;
+            --json) json_mode=true; shift;;
             *) shift;;
         esac
     done
@@ -318,7 +346,12 @@ cmd_done() {
         jq --argjson id "$id" 'del(.issues[]|select((.id|tonumber)==$id))' \
             "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
         printf '\033]1;\007'
-        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") completed & removed"
+        if $json_mode; then
+            echo "✓ $(display_id "$id" "$(get_ext_id "$id")") completed & removed" >&2
+            jq -n --argjson id "$id" '{id:$id,status:"removed"}'
+        else
+            echo "✓ $(display_id "$id" "$(get_ext_id "$id")") completed & removed"
+        fi
     else
         # Move to done status (non-destructive default)
         local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -326,15 +359,26 @@ cmd_done() {
             '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"done",assigned_to:null,updated_at:$now}' \
             "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
         printf '\033]1;\007'
-        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → done"
+        if $json_mode; then
+            echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → done" >&2
+            jq -n --argjson id "$id" '{id:$id,status:"done"}'
+        else
+            echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → done"
+        fi
     fi
 }
 
 cmd_move() {
     init_json
-    [[ -z "$1" || -z "$2" ]] && { echo "Usage: viban move <id> <status>"; exit 1; }
-    local id="$1"
-    local new_status="$2"
+    local json_mode=false
+    local id="" new_status=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --json) json_mode=true; shift;;
+            *) if [[ -z "$id" ]]; then id="$1"; elif [[ -z "$new_status" ]]; then new_status="$1"; fi; shift;;
+        esac
+    done
+    [[ -z "$id" || -z "$new_status" ]] && { echo "Usage: viban move <id> <status>"; exit 1; }
 
     # Validate status
     local valid_statuses="backlog in_progress review done"
@@ -357,7 +401,12 @@ cmd_move() {
         '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:$s,updated_at:$now}' \
         "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
 
-    echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → $new_status"
+    if $json_mode; then
+        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → $new_status" >&2
+        jq -n --argjson id "$id" --arg status "$new_status" '{id:$id,status:$status}'
+    else
+        echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → $new_status"
+    fi
 }
 
 cmd_comment() {
