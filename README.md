@@ -135,6 +135,35 @@ Assigns N issues (default 3, max 5) and spawns one agent per issue in isolated g
 → Each commits on its own branch, coordinator creates PRs
 ```
 
+### `/viban:review` — Checkout for IDE review
+
+Checks out a review-status issue's branch for inspection in your IDE.
+
+```
+/viban:review
+→ Detects first review card, checks out branch, shows diff summary
+/viban:review 12
+→ Checks out branch for issue #12
+```
+
+### `/viban:approve` — Approve and merge
+
+Merges the issue branch, cleans up the worktree, and marks the card as done.
+
+```
+/viban:approve 12
+→ Squash-merges PR, removes worktree/branch, marks #12 done
+```
+
+### `/viban:reject` — Reject with feedback
+
+Returns the issue to in_progress with optional feedback for the agent to address.
+
+```
+/viban:reject 12 "Missing error handling in auth flow"
+→ Moves #12 back to in_progress, records feedback as comment
+```
+
 ### `/viban:setup` — Install and configure
 
 Installs dependencies, detects your project conventions, and generates a workflow file.
