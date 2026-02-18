@@ -257,10 +257,20 @@ cmd_assign() {
     local id=$(printf '%s' "$issue" | jq -r '.id') now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local ext_id=$(printf '%s' "$issue" | jq -r '.external_id // ""')
 
-    # Update status to in_progress (no worktree - use branch workflow)
+    # Update status to in_progress
     jq --argjson id "$id" --arg s "$session" --arg now "$now" \
         '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"in_progress",assigned_to:$s,updated_at:$now}' \
         "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    # Create worktree for isolated work
+    local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+    local branch="issue-$id"
+    local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
+    if [[ -n "$repo_root" && ! -d "$wt_dir" ]]; then
+        mkdir -p "$VIBAN_DATA_DIR/worktrees"
+        git -C "$repo_root" fetch origin main 2>/dev/null
+        git -C "$repo_root" worktree add -b "$branch" "$wt_dir" origin/main 2>/dev/null
+    fi
 
     # Set iTerm2 session name to issue display ID
     local did; did=$(display_id "$id" "$ext_id")
@@ -269,9 +279,9 @@ cmd_assign() {
     if $json_mode; then
         echo "✓ $did assigned" >&2
         jq -n --argjson id "$id" --arg title "$(printf '%s' "$issue" | jq -r '.title')" \
-            '{id:$id,status:"in_progress",title:$title}'
+            --arg worktree "$wt_dir" '{id:$id,status:"in_progress",title:$title,worktree:$worktree}'
     else
-        echo "✓ $did assigned"
+        echo "✓ $did assigned ($wt_dir)"
         echo "$id"
     fi
 }

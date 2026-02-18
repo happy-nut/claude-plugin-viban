@@ -59,16 +59,14 @@ Assess whether the issue description provides enough context to start working.
 - **Clear** → **proceed directly to Step 4. Do NOT ask the user for confirmation. Do NOT ask "should I start?". Just start.**
 - **Unclear** → interview the user with AskUserQuestion to gather missing context, then proceed to Step 4 immediately.
 
-## Step 4: Create Worktree
+## Step 4: Locate Worktree
 
-Create an isolated worktree so the main working directory stays clean for the user:
+`viban assign` automatically creates a worktree. Locate it:
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
-BRANCH="issue-$ISSUE_ID"
 WT_DIR="$REPO_ROOT/.viban/worktrees/$ISSUE_ID"
-mkdir -p "$REPO_ROOT/.viban/worktrees"
-git worktree add -b "$BRANCH" "$WT_DIR" origin/main
+BRANCH="issue-$ISSUE_ID"
 ```
 
 **All subsequent work MUST happen inside `$WT_DIR`.**
