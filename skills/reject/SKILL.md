@@ -5,7 +5,7 @@ description: "Reject a reviewed issue — return to in_progress with feedback"
 
 # /reject
 
-Reject a review-status issue and move it back to in_progress. The worktree stays intact so the agent can address feedback.
+Reject a review-status issue and move it back to in_progress. Restores the worktree so the agent can address feedback.
 
 > **CLI only** (no direct viban.json access)
 
@@ -30,19 +30,27 @@ Confirm the issue is in `review` status. If not, tell the user and exit.
 
 Parse `$ARGUMENTS`: first token is `$ID`, rest is `$FEEDBACK`.
 
----
-
-## Step 2: Return to main branch
-
 ```bash
-PREV_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-[ -z "$PREV_BRANCH" ] && PREV_BRANCH="main"
-git checkout "$PREV_BRANCH"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+BRANCH="issue-$ID"
+WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 ```
 
 ---
 
-## Step 3: Move back to in_progress
+## Step 2: Restore Branch Commits
+
+If worktree was soft-reset (from `/viban:review`):
+
+```bash
+[ -d "$WT_DIR" ] && git -C "$WT_DIR" reset --soft ORIG_HEAD
+```
+
+Worktree stays intact for the agent to continue working.
+
+---
+
+## Step 3: Move Back to in_progress
 
 ```bash
 viban move $ID in_progress
@@ -50,7 +58,7 @@ viban move $ID in_progress
 
 ---
 
-## Step 4: Record feedback
+## Step 4: Record Feedback
 
 If `$FEEDBACK` is provided:
 
@@ -61,7 +69,6 @@ viban comment $ID "$FEEDBACK"
 Also comment on PR if one exists:
 
 ```bash
-BRANCH="issue-$ID"
 PR_NUM=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number' 2>/dev/null)
 [ -n "$PR_NUM" ] && gh pr comment "$PR_NUM" --body "$FEEDBACK"
 ```
@@ -72,11 +79,6 @@ If no feedback provided, ask the user: "Any feedback for the developer?"
 
 ---
 
-## Step 5: Restore stash
+## Step 5: Report
 
-```bash
-STASH=$(git stash list | grep "viban-review: before reviewing #$ID" | head -1 | cut -d: -f1)
-[ -n "$STASH" ] && git stash pop "$STASH"
-```
-
-Report: "Issue #$ID rejected and moved to in_progress. Worktree is intact for the agent to continue."
+Report: "Issue #$ID rejected → in_progress. Worktree intact at `$WT_DIR`."

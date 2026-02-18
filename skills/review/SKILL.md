@@ -1,11 +1,11 @@
 ---
 name: review
-description: "Checkout a review issue's branch for IDE review"
+description: "Prepare a review issue for IDE review via staged diffs"
 ---
 
 # /review
 
-Checkout a review-status issue's branch into the main working directory so the user can review changes in their IDE.
+Prepare a review-status issue for IDE review. Soft-resets the worktree so all changes appear as staged diffs.
 
 > **CLI only** (no direct viban.json access)
 
@@ -40,7 +40,7 @@ Show the user a one-line summary: `#ID [PRIORITY] Title`.
 
 ---
 
-## Step 2: Detect Review Mode
+## Step 2: Locate Worktree
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -48,101 +48,38 @@ BRANCH="issue-$ID"
 WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 ```
 
-Check in priority order — first match wins:
-
-### Mode W: Worktree exists
+If worktree does not exist:
 
 ```bash
-[ -d "$WT_DIR" ]
+[ ! -d "$WT_DIR" ]
 ```
 
-If worktree exists → **Worktree mode**.
-
-### Mode A: PR exists (no worktree)
-
-```bash
-gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null
-```
-
-If PR found → **PR mode**.
-
-### Mode B: Branch exists (no PR, no worktree)
-
-```bash
-git rev-parse --verify "$BRANCH" 2>/dev/null
-```
-
-If branch exists → **Branch mode**.
-
-### Mode C: No branch
-
-No branch → **Commit mode**.
+Tell the user "No worktree found for #$ID. Cannot review." and exit.
 
 ---
 
-## Step 3: Present for Review
-
-### Mode W (worktree exists)
-
-Show changes against main:
+## Step 3: Soft-Reset for IDE Review
 
 ```bash
-git -C "$WT_DIR" log main.."$BRANCH" --oneline
-git -C "$WT_DIR" diff main..."$BRANCH" --stat
+git -C "$WT_DIR" reset --soft main
 ```
 
-Check if PR exists:
-
-```bash
-PR_INFO=$(gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null)
-```
-
-### Mode A / B (no worktree, branch exists)
-
-Stash if dirty:
-
-```bash
-git status --porcelain
-```
-
-If dirty, ask user: "You have uncommitted changes. Stash them to proceed?"
-- Yes → `git stash push -m "viban-review: before reviewing #$ID"`
-- No → exit
-
-Detached HEAD checkout:
-
-```bash
-PREV_BRANCH=$(git branch --show-current)
-git checkout --detach "$BRANCH"
-```
-
-Show changes:
-
-```bash
-git log "$PREV_BRANCH".."$BRANCH" --oneline
-git diff "$PREV_BRANCH"..."$BRANCH" --stat
-```
-
-### Mode C (no branch)
-
-Show recent commits:
-
-```bash
-git log --oneline -10
-```
+Now all changes from the issue branch appear as **staged diffs** when the worktree directory is opened in the IDE.
 
 ---
 
 ## Step 4: Report and Exit
 
+```bash
+PR_INFO=$(gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null)
+```
+
 Tell the user:
 
-**Mode W**: "Issue #$ID worktree is at `$WT_DIR`. Open it in your IDE to review. {PR #N link if PR exists.} Run `/viban:approve $ID` or `/viban:reject $ID` when ready."
-
-**Mode A**: "PR #N for issue #$ID is checked out. Review in your IDE. Run `/viban:approve $ID` or `/viban:reject $ID` when ready."
-
-**Mode B**: "Branch `issue-$ID` is checked out. Review in your IDE. Run `/viban:approve $ID` or `/viban:reject $ID` when ready."
-
-**Mode C**: "Issue #$ID was worked on main directly. Run `/viban:approve $ID` or `/viban:reject $ID` when ready."
+```
+Reviewing #$ID — open $WT_DIR in your IDE to see staged diffs.
+{PR #N: <url> if PR exists}
+Run /viban:approve $ID or /viban:reject $ID when ready.
+```
 
 **Done.** Do not wait for user input. The skill exits here.

@@ -5,7 +5,7 @@ description: "Approve a reviewed issue — merge branch, cleanup worktree, mark 
 
 # /approve
 
-Approve a review-status issue after IDE review. Merges the branch, cleans up the worktree, and marks the card done.
+Approve a review-status issue after IDE review. Restores commits, merges the branch, removes the worktree, and marks the card done.
 
 > **CLI only** (no direct viban.json access)
 
@@ -31,22 +31,17 @@ Confirm the issue is in `review` status. If not, tell the user and exit.
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
 BRANCH="issue-$ID"
-PREV_BRANCH=$(git branch --show-current)
-```
-
-If `$PREV_BRANCH` is empty (detached HEAD from `/viban:review`), determine the main branch:
-
-```bash
-PREV_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-[ -z "$PREV_BRANCH" ] && PREV_BRANCH="main"
+WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 ```
 
 ---
 
-## Step 2: Return to main branch
+## Step 2: Restore Branch Commits
+
+If worktree exists and was soft-reset (from `/viban:review`):
 
 ```bash
-git checkout "$PREV_BRANCH"
+[ -d "$WT_DIR" ] && git -C "$WT_DIR" reset --soft ORIG_HEAD
 ```
 
 ---
@@ -63,25 +58,10 @@ If PR found:
 
 ```bash
 gh pr merge "$PR_NUM" --squash --delete-branch
-```
-
-Clean up worktree if it still exists:
-
-```bash
-WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
-[ -d "$WT_DIR" ] && git worktree remove "$WT_DIR" --force 2>/dev/null
+git pull origin main
 ```
 
 ### If no PR (branch only)
-
-Remove worktree to free the branch:
-
-```bash
-WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
-[ -d "$WT_DIR" ] && git worktree remove "$WT_DIR" --force 2>/dev/null
-```
-
-Merge locally:
 
 ```bash
 git merge "$BRANCH" --no-ff -m "Merge issue-$ID: <title>"
@@ -96,17 +76,18 @@ Nothing to merge. Proceed to Step 4.
 
 ---
 
-## Step 4: Complete
+## Step 4: Cleanup Worktree
+
+```bash
+[ -d "$WT_DIR" ] && git worktree remove "$WT_DIR" --force 2>/dev/null
+```
+
+---
+
+## Step 5: Complete
 
 ```bash
 viban done $ID
-```
-
-Restore stash if one was created during `/viban:review`:
-
-```bash
-STASH=$(git stash list | grep "viban-review: before reviewing #$ID" | head -1 | cut -d: -f1)
-[ -n "$STASH" ] && git stash pop "$STASH"
 ```
 
 Report: "Issue #$ID approved and merged."
