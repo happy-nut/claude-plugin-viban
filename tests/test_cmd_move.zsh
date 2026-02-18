@@ -110,7 +110,7 @@ echo "Test 4: move to done"
 reset_json
 $VIBAN_BIN add "Test task" "desc" P2 feat >/dev/null 2>&1
 run_test
-$VIBAN_BIN move 1 done >/dev/null 2>&1
+$VIBAN_BIN move 1 done --force >/dev/null 2>&1
 card_status=$(get_issue_field 1 "status")
 if [[ "$card_status" == "done" ]]; then
     pass "status = '$card_status'"
