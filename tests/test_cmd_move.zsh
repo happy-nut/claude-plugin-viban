@@ -181,6 +181,67 @@ else
 fi
 
 # ============================================================
+# Test 9: move to done blocked when status is not review
+# ============================================================
+echo ""
+echo "Test 9: move to done blocked when not in review"
+
+reset_json
+$VIBAN_BIN add "Test task" "desc" P2 feat >/dev/null 2>&1
+jq '(.issues[0]) |= . + {status:"in_progress"}' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+run_test
+output=$($VIBAN_BIN move 1 done 2>&1)
+card_status=$(get_issue_field 1 "status")
+if [[ "$card_status" == "in_progress" ]]; then
+    pass "status unchanged: '$card_status'"
+else
+    fail "should stay in_progress" "in_progress" "$card_status"
+fi
+
+run_test
+if [[ "$output" == *"not 'review'"* ]]; then
+    pass "review guard error shown"
+else
+    fail "should show review guard error" "not 'review'" "$output"
+fi
+
+# ============================================================
+# Test 10: move to done --force bypasses review guard
+# ============================================================
+echo ""
+echo "Test 10: move to done --force bypasses guard"
+
+reset_json
+$VIBAN_BIN add "Test task" "desc" P2 feat >/dev/null 2>&1
+jq '(.issues[0]) |= . + {status:"in_progress"}' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+run_test
+$VIBAN_BIN move 1 done --force >/dev/null 2>&1
+card_status=$(get_issue_field 1 "status")
+if [[ "$card_status" == "done" ]]; then
+    pass "force bypassed guard, status = '$card_status'"
+else
+    fail "force should move to done" "done" "$card_status"
+fi
+
+# ============================================================
+# Test 11: move to done from review succeeds without --force
+# ============================================================
+echo ""
+echo "Test 11: move to done from review succeeds"
+
+reset_json
+$VIBAN_BIN add "Test task" "desc" P2 feat >/dev/null 2>&1
+jq '(.issues[0]) |= . + {status:"review"}' "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+run_test
+$VIBAN_BIN move 1 done >/dev/null 2>&1
+card_status=$(get_issue_field 1 "status")
+if [[ "$card_status" == "done" ]]; then
+    pass "review → done works without --force"
+else
+    fail "should move to done" "done" "$card_status"
+fi
+
+# ============================================================
 # Summary
 # ============================================================
 echo ""
