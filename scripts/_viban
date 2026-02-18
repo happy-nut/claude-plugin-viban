@@ -27,6 +27,7 @@ _viban() {
         'edit:Edit task in editor'
         'priority:Set priority'
         'stats:Show statistics'
+        'archive:Archive old done issues'
         'backup:Snapshot viban.json'
         'restore:Restore a backup'
         'changelog:Generate changelog'
@@ -95,6 +96,11 @@ _viban() {
                 '--type[Issue type]:type:(bug feat chore refactor)' \
                 '--priority[Priority]:priority:(P0 P1 P2 P3)' \
                 '--desc[Description]:text:'
+            ;;
+        archive)
+            _arguments \
+                '--days[Days threshold]:days:' \
+                '--dry-run[Preview changes]'
             ;;
         sync)
             _arguments \

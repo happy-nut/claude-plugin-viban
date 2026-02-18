@@ -761,3 +761,53 @@ cmd_changelog() {
         echo ""
     fi
 }
+
+# Archive done issues older than N days (default 30)
+cmd_archive() {
+    init_json
+    local days=30 dry_run=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --days) days="$2"; shift 2;;
+            --dry-run) dry_run=true; shift;;
+            *) shift;;
+        esac
+    done
+
+    local archive_file="$VIBAN_DATA_DIR/archive.json"
+    local cutoff=$(date -u -v-${days}d +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
+                   date -u -d "$days days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
+    [[ -z "$cutoff" ]] && { echo "Error: could not compute date cutoff"; return 1; }
+
+    # Find done issues older than cutoff
+    local to_archive=$(jq --arg cutoff "$cutoff" \
+        '[.issues[] | select(.status == "done" and .updated_at < $cutoff)]' "$VIBAN_JSON")
+    local count=$(printf '%s' "$to_archive" | jq 'length')
+
+    if (( count == 0 )); then
+        echo "No done issues older than $days days to archive"
+        return 0
+    fi
+
+    if $dry_run; then
+        echo "[dry-run] Would archive $count done issue(s) older than $days days:"
+        printf '%s' "$to_archive" | jq -r '.[] | "  #\(.id) \(.title) (done \(.updated_at | split("T")[0]))"'
+        return 0
+    fi
+
+    # Append to archive file
+    if [[ -f "$archive_file" ]]; then
+        local merged=$(jq --argjson new "$to_archive" '. + $new' "$archive_file")
+        printf '%s\n' "$merged" > "$archive_file"
+    else
+        printf '%s\n' "$to_archive" > "$archive_file"
+    fi
+
+    # Remove archived issues from viban.json
+    jq --arg cutoff "$cutoff" \
+        '.issues |= map(select(.status != "done" or .updated_at >= $cutoff))' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+
+    echo "✓ Archived $count done issue(s) older than $days days"
+}

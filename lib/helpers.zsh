@@ -88,6 +88,36 @@ init_json() {
     fi
 }
 
+# Auto-archive done issues older than 30 days (runs silently once per session)
+_VIBAN_AUTO_ARCHIVED=false
+auto_archive() {
+    $_VIBAN_AUTO_ARCHIVED && return
+    _VIBAN_AUTO_ARCHIVED=true
+
+    local archive_file="$VIBAN_DATA_DIR/archive.json"
+    local cutoff=$(date -u -v-30d +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || \
+                   date -u -d "30 days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null)
+    [[ -z "$cutoff" ]] && return
+
+    local count=$(jq --arg cutoff "$cutoff" \
+        '[.issues[] | select(.status == "done" and .updated_at < $cutoff)] | length' "$VIBAN_JSON")
+    (( count == 0 )) && return
+
+    local to_archive=$(jq --arg cutoff "$cutoff" \
+        '[.issues[] | select(.status == "done" and .updated_at < $cutoff)]' "$VIBAN_JSON")
+
+    if [[ -f "$archive_file" ]]; then
+        local merged=$(jq --argjson new "$to_archive" '. + $new' "$archive_file")
+        printf '%s\n' "$merged" > "$archive_file"
+    else
+        printf '%s\n' "$to_archive" > "$archive_file"
+    fi
+
+    jq --arg cutoff "$cutoff" \
+        '.issues |= map(select(.status != "done" or .updated_at >= $cutoff))' \
+        "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+}
+
 get_next_id() { jq -r '.next_id // (([.issues[].id] | max // 0) + 1)' "$VIBAN_JSON"; }
 
 # Display ID: show external_id if present, otherwise #id
