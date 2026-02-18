@@ -137,11 +137,11 @@ Assigns N issues (default 3, max 5) and spawns one agent per issue in isolated g
 
 ### `/viban:review` — Checkout for IDE review
 
-Checks out a review-status issue's branch for inspection in your IDE.
+Checks out the issue branch and soft-resets so all changes appear as staged diffs in your IDE.
 
 ```
 /viban:review
-→ Detects first review card, checks out branch, shows diff summary
+→ Finds first review card, checks out branch, staged diffs ready in IDE
 /viban:review 12
 → Checks out branch for issue #12
 ```
@@ -204,8 +204,8 @@ viban attach <id> <file1> [file2...]
 # Workflow
 viban assign                                        # Assign top backlog
 viban review [id]                                   # → review
-viban move <id> <status>                            # → any status
-viban done <id> [--purge] [--dry-run]               # → done
+viban move <id> <status> [--force]                   # → any status
+viban done <id> [--purge] [--force]                  # → done
 
 # Dependencies
 viban link <id> blocks <id>
@@ -346,7 +346,7 @@ Issues are stored in `.viban/viban.json`:
 
 ```bash
 brew install gum jq
-zsh tests/run_all.zsh    # 19 suites, 212 tests
+zsh tests/run_all.zsh    # 20 suites, 237 tests
 ```
 
 See [docs/release.md](docs/release.md) for publishing.

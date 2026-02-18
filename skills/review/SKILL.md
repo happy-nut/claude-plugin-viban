@@ -1,11 +1,11 @@
 ---
 name: review
-description: "Prepare a review issue for IDE review via staged diffs"
+description: "Checkout a review issue's branch for IDE diff review"
 ---
 
 # /review
 
-Prepare a review-status issue for IDE review. Soft-resets the worktree so all changes appear as staged diffs.
+Checkout a review-status issue's branch into the main worktree so the user can review all changes as staged diffs in their IDE.
 
 > **CLI only** (no direct viban.json access)
 
@@ -40,7 +40,7 @@ Show the user a one-line summary: `#ID [PRIORITY] Title`.
 
 ---
 
-## Step 2: Locate Worktree
+## Step 2: Prepare Branch
 
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
@@ -48,27 +48,42 @@ BRANCH="issue-$ID"
 WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 ```
 
-If worktree does not exist:
+If worktree exists, detach it to free the branch:
 
 ```bash
-[ ! -d "$WT_DIR" ]
+[ -d "$WT_DIR" ] && git -C "$WT_DIR" checkout --detach 2>/dev/null
 ```
-
-Tell the user "No worktree found for #$ID. Cannot review." and exit.
 
 ---
 
-## Step 3: Soft-Reset for IDE Review
+## Step 3: Handle Dirty Working Tree
 
 ```bash
-git -C "$WT_DIR" reset --soft main
+git status --porcelain
 ```
 
-Now all changes from the issue branch appear as **staged diffs** when the worktree directory is opened in the IDE.
+If dirty, ask user with AskUserQuestion:
+- "You have uncommitted changes. How should we save them?"
+- Options:
+  - "Stash" → `git stash push -m "viban-review: before #$ID"`
+  - "Temp commit" → `git add -A && git commit -m "viban-review: temp commit before #$ID"`
+
+If clean, proceed directly.
 
 ---
 
-## Step 4: Report and Exit
+## Step 4: Detached Checkout and Reset
+
+```bash
+git checkout --detach "$BRANCH"
+git reset --soft main
+```
+
+This checks out the branch's commit without moving the branch pointer. Now all changes appear as **staged diffs** in the IDE, and the `$BRANCH` ref stays intact.
+
+---
+
+## Step 5: Report and Exit
 
 ```bash
 PR_INFO=$(gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null)
@@ -77,7 +92,7 @@ PR_INFO=$(gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null)
 Tell the user:
 
 ```
-Reviewing #$ID — open $WT_DIR in your IDE to see staged diffs.
+Reviewing #$ID — all changes are staged in your IDE.
 {PR #N: <url> if PR exists}
 Run /viban:approve $ID or /viban:reject $ID when ready.
 ```

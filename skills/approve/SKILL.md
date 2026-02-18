@@ -5,7 +5,7 @@ description: "Approve a reviewed issue — merge branch, cleanup worktree, mark 
 
 # /approve
 
-Approve a review-status issue after IDE review. Restores commits, merges the branch, removes the worktree, and marks the card done.
+Approve a review-status issue after IDE review. Merges the branch, removes the worktree, and marks the card done.
 
 > **CLI only** (no direct viban.json access)
 
@@ -36,12 +36,12 @@ WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 
 ---
 
-## Step 2: Restore Branch Commits
+## Step 2: Return to Main
 
-If worktree exists and was soft-reset (from `/viban:review`):
+Detached HEAD from `/viban:review` — branch is intact, just switch back:
 
 ```bash
-[ -d "$WT_DIR" ] && git -C "$WT_DIR" reset --soft ORIG_HEAD
+git checkout main
 ```
 
 ---
@@ -88,6 +88,24 @@ Nothing to merge. Proceed to Step 4.
 
 ```bash
 viban done $ID
+```
+
+---
+
+## Step 6: Restore User State
+
+Check for stash:
+
+```bash
+STASH=$(git stash list | grep "viban-review: before #$ID" | head -1 | cut -d: -f1)
+[ -n "$STASH" ] && git stash pop "$STASH"
+```
+
+Check for temp commit:
+
+```bash
+TEMP=$(git log --oneline -1 | grep "viban-review: temp commit before #$ID")
+[ -n "$TEMP" ] && git reset HEAD~1
 ```
 
 Report: "Issue #$ID approved and merged."

@@ -5,7 +5,7 @@ description: "Reject a reviewed issue — return to in_progress with feedback"
 
 # /reject
 
-Reject a review-status issue and move it back to in_progress. Restores the worktree so the agent can address feedback.
+Reject a review-status issue and move it back to in_progress. The worktree stays intact so the agent can address feedback.
 
 > **CLI only** (no direct viban.json access)
 
@@ -38,19 +38,33 @@ WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 
 ---
 
-## Step 2: Restore Branch Commits
+## Step 2: Return to Main
 
-If worktree was soft-reset (from `/viban:review`):
+Detached HEAD from `/viban:review` — branch is intact, just switch back:
 
 ```bash
-[ -d "$WT_DIR" ] && git -C "$WT_DIR" reset --soft ORIG_HEAD
+git checkout main
 ```
-
-Worktree stays intact for the agent to continue working.
 
 ---
 
-## Step 3: Move Back to in_progress
+## Step 3: Re-attach Worktree
+
+If worktree exists (detached during review), re-attach it to the branch:
+
+```bash
+[ -d "$WT_DIR" ] && git -C "$WT_DIR" checkout "$BRANCH"
+```
+
+If worktree does not exist, recreate it:
+
+```bash
+[ ! -d "$WT_DIR" ] && git worktree add "$WT_DIR" "$BRANCH"
+```
+
+---
+
+## Step 4: Move Back to in_progress
 
 ```bash
 viban move $ID in_progress
@@ -58,7 +72,7 @@ viban move $ID in_progress
 
 ---
 
-## Step 4: Record Feedback
+## Step 5: Record Feedback
 
 If `$FEEDBACK` is provided:
 
@@ -79,6 +93,20 @@ If no feedback provided, ask the user: "Any feedback for the developer?"
 
 ---
 
-## Step 5: Report
+## Step 6: Restore User State
+
+Check for stash:
+
+```bash
+STASH=$(git stash list | grep "viban-review: before #$ID" | head -1 | cut -d: -f1)
+[ -n "$STASH" ] && git stash pop "$STASH"
+```
+
+Check for temp commit:
+
+```bash
+TEMP=$(git log --oneline -1 | grep "viban-review: temp commit before #$ID")
+[ -n "$TEMP" ] && git reset HEAD~1
+```
 
 Report: "Issue #$ID rejected → in_progress. Worktree intact at `$WT_DIR`."
