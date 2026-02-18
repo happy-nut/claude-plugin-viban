@@ -53,10 +53,32 @@ cmd_list() {
 
 cmd_history() {
     init_json
+    local show_all=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --all) show_all=true; shift;;
+            *) shift;;
+        esac
+    done
+
+    local archive_file="$VIBAN_DATA_DIR/archive.json"
+    local archived_count=0
+    [[ -f "$archive_file" ]] && archived_count=$(jq 'length' "$archive_file")
+
     local count=$(jq '[.issues[]|select(.status=="done")]|length' "$VIBAN_JSON")
     echo ""
     echo "● Done ($count)"
     jq -r '.issues|map(select(.status=="done"))|sort_by(.updated_at)|reverse|.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end) \(.title)  (\(.updated_at | split("T")[0]))"' "$VIBAN_JSON"
+
+    if $show_all && [[ "$archived_count" -gt 0 ]]; then
+        echo ""
+        echo "● Archived ($archived_count)"
+        jq -r 'sort_by(.updated_at)|reverse|.[]|"  \(if .external_id then .external_id else "#\(.id)" end) [\(.priority // "P3")]\(if .type then " [\(.type | ascii_upcase)]" else "" end) \(.title)  (\(.updated_at | split("T")[0]))"' "$archive_file"
+    fi
+
+    if ! $show_all && [[ "$archived_count" -gt 0 ]]; then
+        echo "  (+ $archived_count archived)"
+    fi
     echo ""
 }
 

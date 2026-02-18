@@ -221,7 +221,7 @@ main() {
     [[ "${1:-}" != "archive" ]] && auto_archive
     case "${1:-}" in
         list)   shift; cmd_list "$@";;
-        history) cmd_history;;
+        history) shift; cmd_history "$@";;
         add)    shift; _with_lock cmd_add "$@";;
         attach) shift; _with_lock cmd_attach "$@";;
         assign) shift; _with_lock cmd_assign "$@";;
