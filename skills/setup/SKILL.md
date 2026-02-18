@@ -161,7 +161,7 @@ Let's set up a custom workflow for this project now.
 Ask the user with AskUserQuestion whether they want to configure a workflow now or skip.
 
 - **"Configure workflow"** → Continue to Step 7
-- **"Skip"** → End setup
+- **"Skip"** → Run `viban init` to generate a default workflow template, then end setup. (`viban init` is safe to run — it skips if workflow.md already exists.)
 
 ### Step 7: Auto-detect Project Configuration
 

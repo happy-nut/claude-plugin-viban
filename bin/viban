@@ -237,6 +237,7 @@ main() {
         export)  cmd_export "$2";;
         migrate) _with_lock cmd_migrate;;
         archive) shift; _with_lock cmd_archive "$@";;
+        init)   cmd_init;;
         sync)   shift; cmd_sync "$@";;
         --version|-v)
             # Get version from package.json
@@ -281,6 +282,7 @@ main() {
             echo "  viban export [md|html]   Export board as markdown or HTML"
             echo "  viban archive [--days N]  Archive done issues older than N days (default 30)"
             echo "  viban migrate     Migrate: extract type from title"
+            echo "  viban init        Generate default .viban/workflow.md template"
             echo "  viban sync        Sync with external issue tracker (GitHub, etc.)"
             echo "  viban update      Update to latest version (if available)"
             echo ""
