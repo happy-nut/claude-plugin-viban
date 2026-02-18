@@ -370,15 +370,16 @@ cmd_done() {
 
 cmd_move() {
     init_json
-    local json_mode=false
+    local json_mode=false force=false
     local id="" new_status=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --json) json_mode=true; shift;;
+            --force) force=true; shift;;
             *) if [[ -z "$id" ]]; then id="$1"; elif [[ -z "$new_status" ]]; then new_status="$1"; fi; shift;;
         esac
     done
-    [[ -z "$id" || -z "$new_status" ]] && { echo "Usage: viban move <id> <status>"; exit 1; }
+    [[ -z "$id" || -z "$new_status" ]] && { echo "Usage: viban move <id> <status> [--json] [--force]"; exit 1; }
 
     # Validate status
     local valid_statuses="backlog in_progress review done"
@@ -394,6 +395,16 @@ cmd_move() {
     if [[ "$cur_status" == "$new_status" ]]; then
         echo "Issue #$id is already in $new_status"
         return 0
+    fi
+
+    # Review guard: moving to done requires review status (same as cmd_done)
+    if [[ "$new_status" == "done" ]] && ! $force; then
+        if [[ "$cur_status" != "review" ]]; then
+            echo "Error: Issue #$id is in '$cur_status', not 'review'"
+            echo "  Move to review first: viban review $id"
+            echo "  Or bypass with: viban move $id done --force"
+            return 1
+        fi
     fi
 
     local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
