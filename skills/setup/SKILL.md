@@ -415,7 +415,7 @@ If build/test fails: fix errors, return to Phase 3.
 
 - Issue tracking: {FROM Q2: "Yes" = synced with external tracker via `viban sync`, "No — auto-number" = auto-increment (viban default), "No — manual IDs" = ask for external ID via `--ext-id` flag}
 - Test evidence: include test output in PR body
-- Post-merge: auto-close issue (`viban done {id}`), delete branch
+- Post-merge: handled by `/viban:approve` (merges PR, runs `viban done {id}`, deletes branch)
 
 ---
 
