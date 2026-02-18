@@ -126,9 +126,11 @@ cleanup() {
     # Release file lock if held
     ${_VIBAN_LOCK_HELD:-false} && rm -rf "${VIBAN_DATA_DIR}/.lock"
     _stop_coproc
-    printf '\033[?25h\033[0m'
-    stty echo 2>/dev/null
-    $IN_TUI && clear
+    if $IN_TUI; then
+        printf '\033[?25h\033[0m'
+        stty echo 2>/dev/null
+        clear
+    fi
     exit 0
 }
 trap cleanup INT TERM EXIT

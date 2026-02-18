@@ -242,7 +242,7 @@ cmd_assign() {
 
     # Set iTerm2 session name to issue display ID
     local did; did=$(display_id "$id" "$ext_id")
-    printf '\033]1;%s\007' "$did"
+    $IN_TUI && printf '\033]1;%s\007' "$did"
 
     if $json_mode; then
         echo "✓ $did assigned" >&2
@@ -272,7 +272,7 @@ cmd_review() {
         "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
 
     # Clear iTerm2 session name
-    printf '\033]1;\007'
+    $IN_TUI && printf '\033]1;\007'
 
     if $json_mode; then
         echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → review" >&2
@@ -345,7 +345,7 @@ cmd_done() {
         fi
         jq --argjson id "$id" 'del(.issues[]|select((.id|tonumber)==$id))' \
             "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
-        printf '\033]1;\007'
+        $IN_TUI && printf '\033]1;\007'
         if $json_mode; then
             echo "✓ $(display_id "$id" "$(get_ext_id "$id")") completed & removed" >&2
             jq -n --argjson id "$id" '{id:$id,status:"removed"}'
@@ -358,7 +358,7 @@ cmd_done() {
         jq --argjson id "$id" --arg now "$now" \
             '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"done",assigned_to:null,updated_at:$now}' \
             "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
-        printf '\033]1;\007'
+        $IN_TUI && printf '\033]1;\007'
         if $json_mode; then
             echo "✓ $(display_id "$id" "$(get_ext_id "$id")") → done" >&2
             jq -n --argjson id "$id" '{id:$id,status:"done"}'
