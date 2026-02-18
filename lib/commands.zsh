@@ -443,16 +443,17 @@ cmd_comment() {
 cmd_get() {
     init_json
     local id="$1"
-    # Output issue JSON
-    jq --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)' "$VIBAN_JSON"
-    # Show sub-tasks if any
-    local subtasks=$(jq -r --argjson id "$id" '[.issues[]|select(.parent_id==$id)]|length' "$VIBAN_JSON")
-    if [[ "$subtasks" -gt 0 ]]; then
-        local done_count=$(jq -r --argjson id "$id" '[.issues[]|select(.parent_id==$id and .status=="done")]|length' "$VIBAN_JSON")
-        echo ""
-        echo "Sub-tasks: $done_count/$subtasks done ($((done_count * 100 / subtasks))%)"
-        jq -r --argjson id "$id" '.issues[]|select(.parent_id==$id)|"  #\(.id) [\(.status)] \(.title)"' "$VIBAN_JSON"
-    fi
+    # Output issue JSON with subtasks embedded (single jq call, pure JSON output)
+    jq --argjson id "$id" '
+        (.issues[] | select((.id|tonumber)==$id)) as $issue |
+        [.issues[] | select(.parent_id==$id)] as $subs |
+        $issue |
+        if ($subs | length) > 0 then
+            . + {subtasks: $subs}
+        else
+            .
+        end
+    ' "$VIBAN_JSON"
 }
 
 cmd_attach() {

@@ -118,7 +118,11 @@ case "$1" in
 esac
 
 IN_TUI=false
+_CLEANUP_DONE=false
 cleanup() {
+    # Guard: prevent double execution (INT/TERM fires cleanup, then exit 0 fires EXIT)
+    $_CLEANUP_DONE && return
+    _CLEANUP_DONE=true
     # Skip cleanup in subshells — EXIT trap fires in $() command substitutions
     [[ ${ZSH_SUBSHELL:-0} -gt 0 ]] && return
     # Kill background sync if running
