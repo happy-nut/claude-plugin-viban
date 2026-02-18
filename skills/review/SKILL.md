@@ -5,7 +5,7 @@ description: "Review a worktree issue — checkout branch locally for IDE review
 
 # /review
 
-Checkout a review-status issue's branch into the main working directory so the user can review changes in their IDE.
+Checkout a review-status issue's branch into the main working directory so the user can review changes in their IDE. Supports iterative feedback: reject sends the card back to in_progress with the worktree intact for the agent to continue.
 
 > **CLI only** (no direct viban.json access)
 
@@ -88,25 +88,16 @@ If dirty, ask user: "You have uncommitted changes. Stash them to proceed?"
 - Yes → `git stash push -m "viban-review: before reviewing #$ID"`
 - No → exit
 
-### 3A.2 Checkout PR branch
+### 3A.2 Detached HEAD checkout
 
-If worktree still exists, remove it to free the branch:
-
-```bash
-[ -d "$WT_DIR" ] && git worktree remove "$WT_DIR" --force 2>/dev/null
-```
-
-Record current branch:
+**Do NOT remove the worktree.** Use detached HEAD to view the branch without conflicting with the worktree:
 
 ```bash
 PREV_BRANCH=$(git branch --show-current)
+git checkout --detach "$BRANCH"
 ```
 
-Checkout via gh:
-
-```bash
-gh pr checkout <PR_NUMBER>
-```
+This puts the main working directory at the same commit as the branch, without "checking out" the branch itself. The worktree remains intact.
 
 ### 3A.3 Show changes and wait
 
@@ -115,7 +106,7 @@ git log "$PREV_BRANCH".."$BRANCH" --oneline
 ```
 
 Tell the user:
-- "PR #N for issue #$ID is checked out. Review in your IDE."
+- "Issue #$ID (PR #N) is checked out for review. Review in your IDE."
 - "Say **approve** or **reject** when ready."
 
 **Wait for user response.**
@@ -125,6 +116,15 @@ Tell the user:
 ```bash
 git checkout "$PREV_BRANCH"
 gh pr merge <PR_NUMBER> --squash --delete-branch
+```
+
+Worktree cleanup happens automatically since the branch is deleted. If the worktree dir still exists:
+
+```bash
+git worktree remove "$WT_DIR" --force 2>/dev/null
+```
+
+```bash
 viban done $ID
 ```
 
@@ -134,6 +134,8 @@ viban done $ID
 git checkout "$PREV_BRANCH"
 viban move $ID in_progress
 ```
+
+**Worktree stays intact** — the agent can go back and work on feedback.
 
 Ask user for feedback. If provided:
 
@@ -152,9 +154,13 @@ If stashed: `git stash pop`
 
 Branch exists locally but no PR was created.
 
-### 3B.1–3B.2: Same as 3A.1–3A.2
+### 3B.1 Stash if needed
 
-Stash if needed, remove worktree if exists, checkout branch.
+Same as 3A.1.
+
+### 3B.2 Detached HEAD checkout
+
+Same as 3A.2 — use `git checkout --detach "$BRANCH"` to preserve the worktree.
 
 ### 3B.3 Show changes and wait
 
@@ -162,12 +168,21 @@ Stash if needed, remove worktree if exists, checkout branch.
 git log "$PREV_BRANCH".."$BRANCH" --oneline
 ```
 
-Tell user to review, wait for verdict.
+Tell user to review in IDE, wait for verdict.
 
 ### 3B.4 Approve
 
 ```bash
 git checkout "$PREV_BRANCH"
+```
+
+Remove worktree to free the branch for merge:
+
+```bash
+[ -d "$WT_DIR" ] && git worktree remove "$WT_DIR" --force 2>/dev/null
+```
+
+```bash
 git merge "$BRANCH" --no-ff -m "Merge issue-$ID: <title>"
 git branch -d "$BRANCH"
 viban done $ID
@@ -177,7 +192,12 @@ If merge conflicts: help user resolve, then continue.
 
 ### 3B.5 Reject
 
-Same as 3A.5 (without gh pr comment).
+```bash
+git checkout "$PREV_BRANCH"
+viban move $ID in_progress
+```
+
+**Worktree stays intact.** Ask for feedback, store as comment.
 
 ### 3B.6 Restore stash
 
@@ -214,3 +234,12 @@ viban move $ID in_progress
 ```
 
 Ask for feedback, store as comment.
+
+---
+
+## Key Design Decisions
+
+- **Detached HEAD** instead of branch checkout: avoids conflicting with worktree's branch lock, keeps worktree intact for iteration.
+- **Worktree persists on reject**: agent can return to the worktree and address feedback without re-creating it.
+- **Worktree removed only on approve**: cleanup happens when work is finalized (branch merge/delete).
+- **`viban done` requires review status**: structural guard prevents agents from skipping review. Only humans approve via this command.

@@ -290,35 +290,31 @@ cmd_done() {
         [[ -z "$title" ]] && { echo "Error: Issue #$id not found"; return 1; }
         if $remove; then
             echo "[dry-run] Would permanently delete #$id \"$title\""
+            local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
+            [[ -d "$wt_dir" ]] && echo "[dry-run] Would remove worktree at $wt_dir"
         else
             echo "[dry-run] Would mark #$id \"$title\" as done"
         fi
-        local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
-        [[ -d "$wt_dir" ]] && echo "[dry-run] Would remove worktree at $wt_dir"
         return 0
     fi
 
-    # Cleanup worktree if exists
-    local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
-    local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
-
-    local branch="issue-$id"
-    local _ext_id=$(get_ext_id "$id")
-    if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
-        local _issue_num="${_ext_id##*:}"
-        if git -C "$repo_root" rev-parse --verify "issue-${_issue_num}" &>/dev/null 2>&1; then
-            branch="issue-${_issue_num}"
-        fi
-    fi
-
-    if [[ -d "$wt_dir" ]]; then
-        git -C "$repo_root" worktree remove "$wt_dir" --force 2>/dev/null
-        git -C "$repo_root" branch -D "$branch" 2>/dev/null
-        echo "✓ worktree removed"
-    fi
-
     if $remove; then
-        # Delete card (old behavior)
+        # Delete card and cleanup worktree
+        local repo_root=$(git rev-parse --show-toplevel 2>/dev/null)
+        local wt_dir="$VIBAN_DATA_DIR/worktrees/$id"
+        local branch="issue-$id"
+        local _ext_id=$(get_ext_id "$id")
+        if [[ -n "$_ext_id" && "$_ext_id" != "null" ]]; then
+            local _issue_num="${_ext_id##*:}"
+            if git -C "$repo_root" rev-parse --verify "issue-${_issue_num}" &>/dev/null 2>&1; then
+                branch="issue-${_issue_num}"
+            fi
+        fi
+        if [[ -d "$wt_dir" ]]; then
+            git -C "$repo_root" worktree remove "$wt_dir" --force 2>/dev/null
+            git -C "$repo_root" branch -D "$branch" 2>/dev/null
+            echo "✓ worktree removed"
+        fi
         jq --argjson id "$id" 'del(.issues[]|select((.id|tonumber)==$id))' \
             "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
         printf '\033]1;\007'
