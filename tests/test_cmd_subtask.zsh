@@ -91,10 +91,11 @@ $VIBAN_BIN add "Child A" "desc" P2 feat --parent 1 >/dev/null 2>&1
 $VIBAN_BIN add "Child B" "desc" P2 feat --parent 1 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN get 1 2>&1)
-if [[ "$output" == *"Sub-tasks: 0/2 done"* ]]; then
-    pass "sub-task summary shown"
+subtask_count=$(echo "$output" | jq '.subtasks | length')
+if [[ "$subtask_count" == "2" ]]; then
+    pass "subtasks array has 2 items"
 else
-    fail "should show sub-task count" "Sub-tasks: 0/2 done" "$output"
+    fail "should show sub-task count" "2" "$subtask_count"
 fi
 
 # ============================================================
@@ -107,10 +108,11 @@ $VIBAN_BIN review 2 >/dev/null 2>&1
 $VIBAN_BIN done 2 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN get 1 2>&1)
-if [[ "$output" == *"Sub-tasks: 1/2 done (50%)"* ]]; then
-    pass "completion = 50%"
+done_count=$(echo "$output" | jq '[.subtasks[] | select(.status=="done")] | length')
+if [[ "$done_count" == "1" ]]; then
+    pass "1 of 2 subtasks done"
 else
-    fail "should show 50%" "Sub-tasks: 1/2 done (50%)" "$output"
+    fail "should show 50%" "1" "$done_count"
 fi
 
 # ============================================================
