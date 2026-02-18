@@ -1,4 +1,46 @@
 # lib/helpers.zsh - Utility functions for data operations
+
+# ============================================================
+# File Locking (portable, mkdir-based)
+# ============================================================
+VIBAN_LOCK_DIR="${VIBAN_DATA_DIR}/.lock"
+VIBAN_LOCK_TIMEOUT=5
+_VIBAN_LOCK_HELD=false
+
+viban_lock() {
+    local deadline=$((SECONDS + VIBAN_LOCK_TIMEOUT))
+    while ! mkdir "$VIBAN_LOCK_DIR" 2>/dev/null; do
+        if [[ -f "$VIBAN_LOCK_DIR/pid" ]]; then
+            local lock_pid
+            lock_pid=$(<"$VIBAN_LOCK_DIR/pid")
+            if ! kill -0 "$lock_pid" 2>/dev/null; then
+                rm -rf "$VIBAN_LOCK_DIR"
+                continue
+            fi
+        fi
+        if (( SECONDS >= deadline )); then
+            echo "Error: Could not acquire lock (timeout ${VIBAN_LOCK_TIMEOUT}s)" >&2
+            return 1
+        fi
+        sleep 0.1
+    done
+    echo $$ > "$VIBAN_LOCK_DIR/pid"
+    _VIBAN_LOCK_HELD=true
+}
+
+viban_unlock() {
+    $_VIBAN_LOCK_HELD && rm -rf "$VIBAN_LOCK_DIR"
+    _VIBAN_LOCK_HELD=false
+}
+
+_with_lock() {
+    viban_lock || exit 1
+    "$@"
+    local rc=$?
+    viban_unlock
+    return $rc
+}
+
 check_deps() {
     command -v gum &>/dev/null || { echo "Error: gum required"; exit 1; }
     command -v jq &>/dev/null || { echo "Error: jq required"; exit 1; }

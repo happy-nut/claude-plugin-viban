@@ -123,6 +123,8 @@ cleanup() {
     [[ ${ZSH_SUBSHELL:-0} -gt 0 ]] && return
     # Kill background sync if running
     [[ -n "${_sync_pid:-}" ]] && kill "$_sync_pid" 2>/dev/null && wait "$_sync_pid" 2>/dev/null
+    # Release file lock if held
+    ${_VIBAN_LOCK_HELD:-false} && rm -rf "${VIBAN_DATA_DIR}/.lock"
     _stop_coproc
     printf '\033[?25h\033[0m'
     stty echo 2>/dev/null
@@ -212,24 +214,24 @@ main() {
     case "${1:-}" in
         list)   shift; cmd_list "$@";;
         history) cmd_history;;
-        add)    shift; cmd_add "$@";;
-        attach) shift; cmd_attach "$@";;
-        assign) cmd_assign "$2";;
-        review) cmd_review "$2";;
-        done)   shift; cmd_done "$@";;
-        move)   cmd_move "$2" "$3";;
+        add)    shift; _with_lock cmd_add "$@";;
+        attach) shift; _with_lock cmd_attach "$@";;
+        assign) _with_lock cmd_assign "$2";;
+        review) _with_lock cmd_review "$2";;
+        done)   shift; _with_lock cmd_done "$@";;
+        move)   _with_lock cmd_move "$2" "$3";;
         get)    cmd_get "$2";;
-        comment) shift; cmd_comment "$@";;
-        link)   cmd_link "$2" "$3" "$4";;
-        unlink) shift; cmd_unlink "$@";;
-        edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; edit_issue "$2";;
-        priority) cmd_priority "$2" "$3";;
+        comment) shift; _with_lock cmd_comment "$@";;
+        link)   _with_lock cmd_link "$2" "$3" "$4";;
+        unlink) shift; _with_lock cmd_unlink "$@";;
+        edit)   [[ -z "$2" ]] && { echo "Usage: viban edit <id>"; exit 1; }; _with_lock edit_issue "$2";;
+        priority) _with_lock cmd_priority "$2" "$3";;
         stats)   cmd_stats;;
-        backup)  cmd_backup;;
-        restore) shift; cmd_restore "$@";;
+        backup)  _with_lock cmd_backup;;
+        restore) shift; _with_lock cmd_restore "$@";;
         changelog) cmd_changelog "$2";;
         export)  cmd_export "$2";;
-        migrate) cmd_migrate;;
+        migrate) _with_lock cmd_migrate;;
         sync)   shift; cmd_sync "$@";;
         --version|-v)
             # Get version from package.json
