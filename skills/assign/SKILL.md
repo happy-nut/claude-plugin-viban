@@ -59,32 +59,48 @@ Assess whether the issue description provides enough context to start working.
 - **Clear** → **proceed directly to Step 4. Do NOT ask the user for confirmation. Do NOT ask "should I start?". Just start.**
 - **Unclear** → interview the user with AskUserQuestion to gather missing context, then proceed to Step 4 immediately.
 
-## Step 4: Execute Workflow
+## Step 4: Create Worktree
+
+Create an isolated worktree so the main working directory stays clean for the user:
+
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel)
+BRANCH="issue-$ISSUE_ID"
+WT_DIR="$REPO_ROOT/.viban/worktrees/$ISSUE_ID"
+mkdir -p "$REPO_ROOT/.viban/worktrees"
+git worktree add -b "$BRANCH" "$WT_DIR" origin/main
+```
+
+**All subsequent work MUST happen inside `$WT_DIR`.**
+
+## Step 5: Execute Workflow
 
 Follow the workflow from Step 0. If no workflow was found, use this default pipeline:
 
-### 4.1 Analyze
+### 5.1 Analyze
 - Explore the codebase to understand the issue
 - Identify root cause and scope of change
 
-### 4.2 Implement
-- Create a branch: `git checkout -b issue-{ISSUE_ID}`
+### 5.2 Implement
+- Work inside the worktree: `cd $WT_DIR`
 - Make the fix/feature changes
 - Write or update tests as appropriate
 
-### 4.3 Verify
-- Run build and tests to confirm the fix works
+### 5.3 Verify
+- Run build and tests inside the worktree to confirm the fix works
 - Verify no regressions
 
-### 4.4 Ship (MANDATORY — execute ALL 4 commands in sequence)
+### 5.4 Ship (MANDATORY — execute ALL 4 commands in sequence)
 
 ```bash
+cd $WT_DIR
+
 # 1. Commit
 git add -A
 git commit -m "fix: {description} (#$ISSUE_ID)"
 
 # 2. Push
-git push -u origin issue-$ISSUE_ID
+git push -u origin $BRANCH
 
 # 3. Create PR (REQUIRED — do NOT skip)
 gh pr create --title "fix: {description}" --body "Resolves #$ISSUE_ID
@@ -100,17 +116,20 @@ viban review $ISSUE_ID
 ```
 
 **If any command fails**: fix the error and retry. Do NOT skip any step.
+**Do NOT remove the worktree** — it stays for the review/approve/reject flow.
 
 ### Completion Checklist (ALL must be true before you stop)
 
 - [ ] PR created (you have a PR URL)
 - [ ] `viban review` called (issue status is "review")
+- [ ] Worktree preserved at `.viban/worktrees/$ISSUE_ID`
 - [ ] Completion message includes PR URL
 
 ```
 Issue #{id} resolved → review
   Title: {title}
   PR: {pr_url}
+  Worktree: .viban/worktrees/{id}
 ```
 
 **If you don't have a PR URL or haven't called `viban review`, you are NOT done. Go back and do it.**

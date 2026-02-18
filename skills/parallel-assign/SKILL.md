@@ -190,19 +190,7 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 ```
 
-### 3.1 Remove Worktrees (branches survive)
-
-Worktree removal does NOT delete the branch or its commits — they remain in the local repo.
-
-```bash
-for entry in "${ISSUES[@]}"; do
-    ID="${entry%%|*}"
-    WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
-    git worktree remove "$WT_DIR" --force
-done
-```
-
-### 3.2 Verify Local Branches
+### 3.1 Verify Local Branches
 
 Confirm each branch has commits from the agent:
 
@@ -215,7 +203,7 @@ done
 
 If a branch has no new commits (agent failed), skip it and report.
 
-### 3.3 Push Branches & Create PRs
+### 3.2 Push Branches & Create PRs
 
 For each branch with commits, push from the main repo and create a PR:
 
@@ -237,7 +225,7 @@ for entry in "${ISSUES[@]}"; do
 done
 ```
 
-### 3.4 Verify PRs Exist
+### 3.3 Verify PRs Exist
 
 ```bash
 for entry in "${ISSUES[@]}"; do
@@ -303,7 +291,7 @@ Worktrees cleaned up. All PRs ready for human review.
 
 > 1. **NEVER read or write `viban.json` directly** — always use `viban` CLI commands. Direct JSON access causes race conditions and data corruption.
 > 2. **NEVER exit with any issue still in `in_progress`.** For every assigned issue, ensure `viban review {ID}` has been called.
-> 3. **ALWAYS clean up worktrees** after PRs are created. Worktree dirs must not linger in `.viban/worktrees/`.
+> 3. **Do NOT remove worktrees** after PRs are created. Worktrees stay at `.viban/worktrees/{ID}` for the review flow (`/viban:approve` cleans up).
 
 ## CLI Reference
 

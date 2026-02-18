@@ -45,9 +45,20 @@ Show the user a one-line summary: `#ID [PRIORITY] Title`.
 ```bash
 REPO_ROOT=$(git rev-parse --show-toplevel)
 BRANCH="issue-$ID"
+WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
 ```
 
-### Mode A: PR exists
+Check in priority order — first match wins:
+
+### Mode W: Worktree exists
+
+```bash
+[ -d "$WT_DIR" ]
+```
+
+If worktree exists → **Worktree mode**.
+
+### Mode A: PR exists (no worktree)
 
 ```bash
 gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null
@@ -55,7 +66,7 @@ gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null
 
 If PR found → **PR mode**.
 
-### Mode B: Branch exists (no PR)
+### Mode B: Branch exists (no PR, no worktree)
 
 ```bash
 git rev-parse --verify "$BRANCH" 2>/dev/null
@@ -69,9 +80,24 @@ No branch → **Commit mode**.
 
 ---
 
-## Step 3: Checkout for Review
+## Step 3: Present for Review
 
-### Mode A / B (branch exists)
+### Mode W (worktree exists)
+
+Show changes against main:
+
+```bash
+git -C "$WT_DIR" log main.."$BRANCH" --oneline
+git -C "$WT_DIR" diff main..."$BRANCH" --stat
+```
+
+Check if PR exists:
+
+```bash
+PR_INFO=$(gh pr list --head "$BRANCH" --json number,url --jq '.[0]' 2>/dev/null)
+```
+
+### Mode A / B (no worktree, branch exists)
 
 Stash if dirty:
 
@@ -83,7 +109,7 @@ If dirty, ask user: "You have uncommitted changes. Stash them to proceed?"
 - Yes → `git stash push -m "viban-review: before reviewing #$ID"`
 - No → exit
 
-Detached HEAD checkout (preserves worktree):
+Detached HEAD checkout:
 
 ```bash
 PREV_BRANCH=$(git branch --show-current)
@@ -110,6 +136,8 @@ git log --oneline -10
 ## Step 4: Report and Exit
 
 Tell the user:
+
+**Mode W**: "Issue #$ID worktree is at `$WT_DIR`. Open it in your IDE to review. {PR #N link if PR exists.} Run `/viban:approve $ID` or `/viban:reject $ID` when ready."
 
 **Mode A**: "PR #N for issue #$ID is checked out. Review in your IDE. Run `/viban:approve $ID` or `/viban:reject $ID` when ready."
 

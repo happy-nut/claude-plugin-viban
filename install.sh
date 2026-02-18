@@ -176,6 +176,7 @@ if [[ -f "$VIBAN_COMP_SRC" ]]; then
     mkdir -p "$COMP_DIR"
     cp "$VIBAN_COMP_SRC" "$COMP_DIR/_viban"
     if ! grep -q 'fpath.*\.zsh/completions' "${HOME}/.zshrc" 2>/dev/null; then
+        # shellcheck disable=SC2016
         echo 'fpath=(~/.zsh/completions $fpath)' >> "${HOME}/.zshrc"
         echo 'autoload -Uz compinit && compinit' >> "${HOME}/.zshrc"
     fi

@@ -57,27 +57,30 @@ EOF
 
 ## Workflow Rules
 
-### 🔴 Worktree 사용 금지
-- **main repo에서 feature branch로 직접 작업**
-- worktree 생성/사용 금지 (사용자 명시적 요청)
+### Worktree-Based Workflow
+- 모든 이슈 작업은 `.viban/worktrees/{ID}` 에서 격리된 워크트리로 수행
+- 메인 워크트리는 사용자 작업용으로 깨끗하게 유지
 - 브랜치 네이밍: `issue-{ISSUE_ID}` (예: `issue-78`)
 
-### Branch-Based Workflow
 ```bash
-# 1. main에서 분기
-git checkout main && git pull
-git checkout -b issue-{ISSUE_ID}
+# 1. 워크트리 생성
+REPO_ROOT=$(git rev-parse --show-toplevel)
+git worktree add -b issue-{ISSUE_ID} "$REPO_ROOT/.viban/worktrees/{ISSUE_ID}" origin/main
 
-# 2. 작업 후 push
+# 2. 워크트리 안에서 작업 후 push
+cd "$REPO_ROOT/.viban/worktrees/{ISSUE_ID}"
 git push -u origin issue-{ISSUE_ID}
 
 # 3. PR 생성
 gh pr create --title "..." --body "..."
 ```
 
+- 워크트리는 `/viban:approve`가 merge 후 정리
+- `/viban:reject` 시 워크트리 유지 (재작업용)
+
 ### Base Branch Sync
-- Before branch creation: `git fetch origin main`
-- Before PR push: `git fetch origin main && git rebase origin/main`
+- Before worktree creation: `git fetch origin main`
+- Before PR push: `git fetch origin main && git rebase origin/main` (inside worktree)
 - Resolve conflicts if any before pushing
 
 ## Shell Script Rules
