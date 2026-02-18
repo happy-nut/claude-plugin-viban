@@ -267,7 +267,7 @@ main() {
             echo "  viban priority <id> <P0-P3>   Set priority"
             echo "  viban assign      Assign first backlog (by priority)"
             echo "  viban review      → Human Review"
-            echo "  viban move <id> <status>     Move to status (backlog,in_progress,review,done)"
+            echo "  viban move <id> <status> [--force]  Move to status (done requires review; --force to bypass)"
             echo "  viban done <id> [--purge] [--force]  Complete (requires review status; --force to bypass)"
             echo "  viban comment <id> \"msg\"  Add comment to task"
             echo "  viban link <id> blocks <id>  Add dependency"

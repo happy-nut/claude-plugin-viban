@@ -189,7 +189,7 @@ echo "Test 8: move to done updates history and stats"
 
 reset_json
 $VIBAN_BIN add "Task X" "desc" P1 feat >/dev/null 2>&1
-$VIBAN_BIN move 1 done >/dev/null 2>&1
+$VIBAN_BIN move 1 done --force >/dev/null 2>&1
 run_test
 local hist=$($VIBAN_BIN history 2>&1)
 local stats=$($VIBAN_BIN stats 2>&1)
