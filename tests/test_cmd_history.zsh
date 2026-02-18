@@ -61,6 +61,7 @@ echo "Test 1: done archives issue"
 reset_json
 $VIBAN_BIN add "Task A" "desc" P2 feat >/dev/null 2>&1
 run_test
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 >/dev/null 2>&1
 count=$(issue_count)
 card_status=$(get_issue_field 1 "status")
@@ -79,6 +80,7 @@ echo "Test 2: done --purge deletes"
 reset_json
 $VIBAN_BIN add "Task A" "desc" P2 feat >/dev/null 2>&1
 run_test
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 --purge >/dev/null 2>&1
 count=$(issue_count)
 if [[ "$count" == "0" ]]; then
@@ -96,6 +98,7 @@ echo "Test 3: done --remove backward compat"
 reset_json
 $VIBAN_BIN add "Task A" "desc" P2 feat >/dev/null 2>&1
 run_test
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 --remove >/dev/null 2>&1
 count=$(issue_count)
 if [[ "$count" == "0" ]]; then
@@ -113,6 +116,7 @@ echo "Test 4: history shows done issues"
 reset_json
 $VIBAN_BIN add "Completed task" "desc" P1 bug >/dev/null 2>&1
 $VIBAN_BIN add "Active task" "desc" P2 feat >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN history 2>&1)
@@ -161,6 +165,7 @@ echo "Test 7: list --status filter"
 reset_json
 $VIBAN_BIN add "Backlog task" "desc" P2 feat >/dev/null 2>&1
 $VIBAN_BIN add "Done task" "desc" P1 bug >/dev/null 2>&1
+$VIBAN_BIN review 2 >/dev/null 2>&1
 $VIBAN_BIN done 2 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN list --status done 2>&1)

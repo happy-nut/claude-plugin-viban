@@ -103,6 +103,7 @@ fi
 echo ""
 echo "Test 4: completion percentage updates"
 
+$VIBAN_BIN review 2 >/dev/null 2>&1
 $VIBAN_BIN done 2 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN get 1 2>&1)

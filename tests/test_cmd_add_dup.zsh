@@ -116,6 +116,7 @@ echo "Test 5: ignores done issues"
 
 reset_json
 $VIBAN_BIN add "Login fails after reset" "desc" P1 bug >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN add "Login fails after reset" "desc" P2 bug 2>&1)

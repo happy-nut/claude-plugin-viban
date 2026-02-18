@@ -257,17 +257,33 @@ cmd_review() {
 
 cmd_done() {
     init_json
-    [[ -z "$1" ]] && { echo "Usage: viban done <id> [--purge] [--dry-run]"; exit 1; }
+    [[ -z "$1" ]] && { echo "Usage: viban done <id> [--purge] [--dry-run] [--force]"; exit 1; }
     local id="$1"
-    local remove=false dry_run=false
+    local remove=false dry_run=false force=false
     shift
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --remove|--purge) remove=true; shift;;
             --dry-run) dry_run=true; shift;;
+            --force) force=true; shift;;
             *) shift;;
         esac
     done
+
+    # Enforce review-before-done workflow
+    if ! $force; then
+        local current_status=$(jq -r --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)|.status//empty' "$VIBAN_JSON")
+        if [[ -z "$current_status" ]]; then
+            echo "Error: Issue #$id not found"
+            return 1
+        fi
+        if [[ "$current_status" != "review" ]]; then
+            echo "Error: Issue #$id is in '$current_status', not 'review'"
+            echo "  Move to review first: viban review $id"
+            echo "  Or bypass with: viban done $id --force"
+            return 1
+        fi
+    fi
 
     if $dry_run; then
         local title=$(jq -r --argjson id "$id" '.issues[]|select((.id|tonumber)==$id)|.title//empty' "$VIBAN_JSON")

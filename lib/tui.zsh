@@ -784,13 +784,25 @@ level1_columns() {
                         printf '\033[?25h'
                         stty echo 2>/dev/null
                         printf '\033[%d;1H\033[K' "$CACHED_TERM_H"
-                        if gum confirm "Done $(display_id "$id" "$(get_ext_id "$id")")?" --affirmative "Yes" --negative "No" \
-                            --selected.foreground="#000000" --selected.background "${C[accent]}"; then
-                            local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-                            jq --argjson id "$id" --arg now "$now" \
-                                '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"done",assigned_to:null,updated_at:$now}' \
-                                "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
-                            (( card > 0 )) && card=$((card - 1))
+                        local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                        if [[ "$st" == "review" ]]; then
+                            # Review column: D = approve and mark done
+                            if gum confirm "Done $(display_id "$id" "$(get_ext_id "$id")")?" --affirmative "Yes" --negative "No" \
+                                --selected.foreground="#000000" --selected.background "${C[accent]}"; then
+                                jq --argjson id "$id" --arg now "$now" \
+                                    '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"done",assigned_to:null,updated_at:$now}' \
+                                    "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+                                (( card > 0 )) && card=$((card - 1))
+                            fi
+                        else
+                            # Other columns: D = move to review
+                            if gum confirm "Move $(display_id "$id" "$(get_ext_id "$id")") to review?" --affirmative "Yes" --negative "No" \
+                                --selected.foreground="#000000" --selected.background "${C[accent]}"; then
+                                jq --argjson id "$id" --arg now "$now" \
+                                    '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"review",assigned_to:null,updated_at:$now}' \
+                                    "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+                                (( card > 0 )) && card=$((card - 1))
+                            fi
                         fi
                         stty -echo 2>/dev/null
                         printf '\033[?25l'

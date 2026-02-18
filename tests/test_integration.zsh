@@ -72,6 +72,7 @@ echo "Test 2: comment on done issue"
 
 reset_json
 $VIBAN_BIN add "Task A" "desc" P1 bug >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN comment 1 "Post-mortem note" 2>&1)
@@ -110,6 +111,7 @@ echo "Test 4: duplicate detection with done issues"
 
 reset_json
 $VIBAN_BIN add "Fix login bug" "desc" P1 bug >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN add "Fix login bug" "desc" P1 bug 2>&1)
@@ -130,6 +132,7 @@ $VIBAN_BIN add "Task A" "desc" P0 bug >/dev/null 2>&1
 $VIBAN_BIN add "Task B" "desc" P1 feat >/dev/null 2>&1
 $VIBAN_BIN add "Task C" "desc" P2 chore >/dev/null 2>&1
 $VIBAN_BIN link 1 blocks 2 >/dev/null 2>&1
+$VIBAN_BIN review 3 >/dev/null 2>&1
 $VIBAN_BIN done 3 >/dev/null 2>&1
 $VIBAN_BIN comment 1 "Working on it" >/dev/null 2>&1
 run_test
@@ -149,6 +152,7 @@ echo "Test 6: history includes done sub-tasks"
 reset_json
 $VIBAN_BIN add "Parent" "desc" P1 feat >/dev/null 2>&1
 $VIBAN_BIN add "Child" "desc" P2 feat --parent 1 >/dev/null 2>&1
+$VIBAN_BIN review 2 >/dev/null 2>&1
 $VIBAN_BIN done 2 >/dev/null 2>&1
 run_test
 output=$($VIBAN_BIN history 2>&1)

@@ -60,6 +60,7 @@ echo "Test 1: done sets status to 'done'"
 
 reset_json
 $VIBAN_BIN add "Test task" "desc" P2 feat >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 run_test
 $VIBAN_BIN done 1 >/dev/null 2>&1
 card_status=$(get_issue_field 1 "status")
@@ -77,8 +78,8 @@ echo "Test 2: done clears assigned_to"
 
 reset_json
 $VIBAN_BIN add "Test task" "desc" P2 feat >/dev/null 2>&1
-# Set assigned_to first
-jq '(.issues[0]) |= . + {assigned_to:"agent-1",status:"in_progress"}' \
+# Set assigned_to and move to review
+jq '(.issues[0]) |= . + {assigned_to:"agent-1",status:"review"}' \
     "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
 run_test
 $VIBAN_BIN done 1 >/dev/null 2>&1
@@ -97,6 +98,7 @@ echo "Test 3: done --remove deletes card"
 
 reset_json
 $VIBAN_BIN add "Test task" "desc" P2 feat >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 run_test
 $VIBAN_BIN done 1 --remove >/dev/null 2>&1
 count=$(issue_count)
@@ -130,6 +132,7 @@ echo "Test 5: card count unchanged after done"
 reset_json
 $VIBAN_BIN add "Task A" "desc" P2 feat >/dev/null 2>&1
 $VIBAN_BIN add "Task B" "desc" P1 bug >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 run_test
 $VIBAN_BIN done 1 >/dev/null 2>&1
 count=$(issue_count)
@@ -148,6 +151,7 @@ echo "Test 6: card count decremented after done --remove"
 reset_json
 $VIBAN_BIN add "Task A" "desc" P2 feat >/dev/null 2>&1
 $VIBAN_BIN add "Task B" "desc" P1 bug >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 run_test
 $VIBAN_BIN done 1 --remove >/dev/null 2>&1
 count=$(issue_count)
@@ -155,6 +159,39 @@ if [[ "$count" == "1" ]]; then
     pass "count = 1 after --remove"
 else
     fail "count should be 1" "1" "$count"
+fi
+
+# ============================================================
+# Test 7: done rejects non-review issues
+# ============================================================
+echo ""
+echo "Test 7: done rejects non-review status"
+
+reset_json
+$VIBAN_BIN add "Task A" "desc" P2 feat >/dev/null 2>&1
+run_test
+output=$($VIBAN_BIN done 1 2>&1)
+if [[ "$output" == *"not 'review'"* ]]; then
+    pass "rejects backlog issue"
+else
+    fail "should reject non-review" "not 'review'" "$output"
+fi
+
+# ============================================================
+# Test 8: done --force bypasses review guard
+# ============================================================
+echo ""
+echo "Test 8: done --force bypasses guard"
+
+reset_json
+$VIBAN_BIN add "Task A" "desc" P2 feat >/dev/null 2>&1
+run_test
+$VIBAN_BIN done 1 --force >/dev/null 2>&1
+card_status=$(get_issue_field 1 "status")
+if [[ "$card_status" == "done" ]]; then
+    pass "force bypassed guard, status = '$card_status'"
+else
+    fail "force should work" "done" "$card_status"
 fi
 
 # ============================================================

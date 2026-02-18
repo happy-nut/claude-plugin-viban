@@ -195,6 +195,7 @@ reset_json
 $VIBAN_BIN add "Task A" "desc" P1 feat >/dev/null 2>&1
 $VIBAN_BIN add "Task B" "desc" P0 feat >/dev/null 2>&1
 $VIBAN_BIN link 1 blocks 2 >/dev/null 2>&1
+$VIBAN_BIN review 1 >/dev/null 2>&1
 $VIBAN_BIN done 1 >/dev/null 2>&1
 run_test
 $VIBAN_BIN assign >/dev/null 2>&1
