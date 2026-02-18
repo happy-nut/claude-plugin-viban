@@ -1,0 +1,111 @@
+#compdef viban
+# zsh completion for viban - Kanban board CLI
+
+_viban_issue_ids() {
+    local -a ids
+    if [[ -f "${VIBAN_DATA_DIR:-${PWD}/.viban}/viban.json" ]]; then
+        local json="${VIBAN_DATA_DIR:-${PWD}/.viban}/viban.json"
+        ids=(${(f)"$(jq -r '.issues[] | select(.status != "done") | "#\(.id) [\(.priority)] \(.title)"' "$json" 2>/dev/null)"})
+        _describe 'issue' ids
+    fi
+}
+
+_viban() {
+    local -a commands=(
+        'list:Show board'
+        'history:Show completed issues'
+        'add:Add task'
+        'attach:Attach files to task'
+        'assign:Assign first backlog issue'
+        'review:Move to review'
+        'done:Complete task'
+        'move:Move to status'
+        'get:Get task details'
+        'comment:Add comment'
+        'link:Add dependency'
+        'unlink:Remove dependency'
+        'edit:Edit task in editor'
+        'priority:Set priority'
+        'stats:Show statistics'
+        'backup:Snapshot viban.json'
+        'restore:Restore a backup'
+        'changelog:Generate changelog'
+        'export:Export board'
+        'migrate:Migrate data'
+        'sync:Sync with GitHub'
+        'update:Update to latest version'
+        'help:Show help'
+    )
+
+    local -a statuses=('backlog' 'in_progress' 'review' 'done')
+    local -a priorities=('P0:Critical' 'P1:High' 'P2:Medium' 'P3:Low')
+    local -a types=('bug' 'feat' 'chore' 'refactor')
+
+    if (( CURRENT == 2 )); then
+        _describe 'command' commands
+        return
+    fi
+
+    case "${words[2]}" in
+        done|get|edit|review|comment|attach|priority)
+            if (( CURRENT == 3 )); then
+                _viban_issue_ids
+            fi
+            ;;
+        move)
+            if (( CURRENT == 3 )); then
+                _viban_issue_ids
+            elif (( CURRENT == 4 )); then
+                _describe 'status' statuses
+            fi
+            ;;
+        link|unlink)
+            if (( CURRENT == 3 )); then
+                _viban_issue_ids
+            elif (( CURRENT == 4 )); then
+                local -a rels=('blocks')
+                _describe 'relation' rels
+            elif (( CURRENT == 5 )); then
+                _viban_issue_ids
+            fi
+            ;;
+        priority)
+            if (( CURRENT == 3 )); then
+                _viban_issue_ids
+            elif (( CURRENT == 4 )); then
+                _describe 'priority' priorities
+            fi
+            ;;
+        list)
+            _arguments \
+                '--status[Filter by status]:status:(backlog in_progress review done)' \
+                '--priority[Filter by priority]:priority:(P0 P1 P2 P3)' \
+                '--type[Filter by type]:type:(bug feat chore refactor)' \
+                '--search[Search text]:text:'
+            ;;
+        export)
+            if (( CURRENT == 3 )); then
+                local -a formats=('md:Markdown' 'html:HTML')
+                _describe 'format' formats
+            fi
+            ;;
+        add)
+            _arguments \
+                '--parent[Parent issue ID]:id:_viban_issue_ids' \
+                '--type[Issue type]:type:(bug feat chore refactor)' \
+                '--priority[Priority]:priority:(P0 P1 P2 P3)' \
+                '--desc[Description]:text:'
+            ;;
+        sync)
+            _arguments \
+                '--init[Initialize sync]' \
+                '--dry-run[Preview changes]' \
+                '--push-new[Push local issues]' \
+                '--pull-only[Pull only]' \
+                '--push-only[Push only]' \
+                '--auto[Silent auto-sync]'
+            ;;
+    esac
+}
+
+_viban "$@"

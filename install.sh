@@ -169,6 +169,19 @@ npm install -g claude-plugin-viban
 echo ""
 echo -e "${GREEN}✓${NC} viban installed globally"
 
+# Install zsh completion
+VIBAN_COMP_SRC="$(npm root -g)/claude-plugin-viban/scripts/_viban"
+if [[ -f "$VIBAN_COMP_SRC" ]]; then
+    COMP_DIR="${HOME}/.zsh/completions"
+    mkdir -p "$COMP_DIR"
+    cp "$VIBAN_COMP_SRC" "$COMP_DIR/_viban"
+    if ! grep -q 'fpath.*\.zsh/completions' "${HOME}/.zshrc" 2>/dev/null; then
+        echo 'fpath=(~/.zsh/completions $fpath)' >> "${HOME}/.zshrc"
+        echo 'autoload -Uz compinit && compinit' >> "${HOME}/.zshrc"
+    fi
+    echo -e "${GREEN}✓${NC} zsh completion installed (restart shell to activate)"
+fi
+
 # Register Claude Code plugin
 echo ""
 echo -e "${BOLD}Registering Claude Code plugin...${NC}"
