@@ -447,7 +447,7 @@ draw_board() {
 
 draw_footer() {
     printf '\033[K\n'
-    print_center "←→ Column  │  ↑↓ Card  │  Shift+↑↓ Reorder  │  Shift+←→ Move  │  Enter Edit/PR  │  ⌫ Del  │  A Add  │  Q Quit" "${A_DIM}"
+    print_center "←→ Col │ ↑↓ Card │ ⇧↑↓ Reorder │ ⇧←→ Move │ Enter Edit │ ⌫ Del │ A Add │ D Done │ C Comment │ / Search │ Q Quit" "${A_DIM}"
 }
 
 read_key() {
@@ -492,6 +492,9 @@ read_key() {
         case "$key" in
             q|Q) result="quit";;
             a|A) result="add";;
+            d|D) result="done";;
+            c|C) result="comment";;
+            /)   result="search";;
         esac
     fi
 
@@ -773,6 +776,82 @@ level1_columns() {
                         draw_footer
                     }
                 fi
+                ;;
+            done)
+                if (( cnt > 0 )); then
+                    local id=$(get_issue_id_at_index "$st" "$card" "$json_data")
+                    [[ -n "$id" ]] && {
+                        printf '\033[?25h'
+                        stty echo 2>/dev/null
+                        printf '\033[%d;1H\033[K' "$CACHED_TERM_H"
+                        if gum confirm "Done $(display_id "$id" "$(get_ext_id "$id")")?" --affirmative "Yes" --negative "No" \
+                            --selected.foreground="#000000" --selected.background "${C[accent]}"; then
+                            local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                            jq --argjson id "$id" --arg now "$now" \
+                                '(.issues[]|select((.id|tonumber)==$id)) |= . + {status:"done",assigned_to:null,updated_at:$now}' \
+                                "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+                            (( card > 0 )) && card=$((card - 1))
+                        fi
+                        stty -echo 2>/dev/null
+                        printf '\033[?25l'
+                        printf '\033[%d;1H\033[K' "$((CACHED_TERM_H - 1))"
+                        draw_footer
+                    }
+                fi
+                ;;
+            comment)
+                if (( cnt > 0 )); then
+                    local id=$(get_issue_id_at_index "$st" "$card" "$json_data")
+                    [[ -n "$id" ]] && {
+                        printf '\033[?25h'
+                        stty echo 2>/dev/null
+                        printf '\033[%d;1H\033[K' "$CACHED_TERM_H"
+                        local msg=$(gum input --placeholder "Comment on $(display_id "$id" "$(get_ext_id "$id")")..." --width 60 \
+                            --prompt.foreground "${C[accent]}" --cursor.foreground "${C[selected]}")
+                        if [[ -n "$msg" ]]; then
+                            local now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                            jq --argjson id "$id" --arg msg "$msg" --arg now "$now" \
+                                '(.issues[]|select((.id|tonumber)==$id)) |= . + {comments:((.comments // []) + [{text:$msg,created_at:$now}]),updated_at:$now}' \
+                                "$VIBAN_JSON" > "$VIBAN_JSON.tmp" && mv "$VIBAN_JSON.tmp" "$VIBAN_JSON"
+                        fi
+                        stty -echo 2>/dev/null
+                        printf '\033[?25l\033[2J\033[H'
+                    }
+                fi
+                ;;
+            search)
+                printf '\033[?25h'
+                stty echo 2>/dev/null
+                # Build list of all non-done issues: "#id [priority] title"
+                local choices=$(jq -r '.issues[] | select(.status != "done") | "#\(.id) [\(.priority // "P3")] \(.title)"' "$VIBAN_JSON")
+                if [[ -n "$choices" ]]; then
+                    printf '\033[%d;1H\033[K' "$CACHED_TERM_H"
+                    local pick=$(printf '%s' "$choices" | gum filter --placeholder "Search issues..." --width 60)
+                    if [[ -n "$pick" ]]; then
+                        # Extract id from "#<id> [...]"
+                        local sid="${pick#\#}"
+                        sid="${sid%% *}"
+                        # Find which column and card index this id is in
+                        local found_col=-1 found_card=0
+                        for ci in 0 1 2; do
+                            local cst="${VIBAN_STATUSES[$((ci + 1))]}"
+                            local sort_expr=$(get_sort_expr "$cst")
+                            local cidx=$(printf '%s' "$json_data" | jq -r --arg s "$cst" --argjson id "$sid" \
+                                ".issues | map(select(.status==\$s)) | $sort_expr | to_entries | map(select(.value.id == \$id)) | .[0].key // empty")
+                            if [[ -n "$cidx" ]]; then
+                                found_col=$ci
+                                found_card=$cidx
+                                break
+                            fi
+                        done
+                        if (( found_col >= 0 )); then
+                            col=$found_col
+                            card=$found_card
+                        fi
+                    fi
+                fi
+                stty -echo 2>/dev/null
+                printf '\033[?25l\033[2J\033[H'
                 ;;
             quit)
                 printf '\033[?25h\033[0m'
