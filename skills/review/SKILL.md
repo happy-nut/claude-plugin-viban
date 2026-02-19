@@ -43,9 +43,8 @@ Show the user a one-line summary: `#ID [PRIORITY] Title`.
 ## Step 2: Prepare Branch
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
 BRANCH="issue-$ID"
-WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
+WT_DIR="$PWD/.viban/worktrees/$ID"
 ```
 
 If worktree exists, detach it to free the branch:
@@ -98,3 +97,10 @@ Run /viban:approve $ID or /viban:reject $ID when ready.
 ```
 
 **Done.** Do not wait for user input. The skill exits here.
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `viban list --status review` | List review-status issues |
+| `viban get <id>` | View issue details |

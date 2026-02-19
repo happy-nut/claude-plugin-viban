@@ -14,6 +14,7 @@ Assign the first backlog issue and execute the full resolution workflow. If the 
 ## Output Rules
 
 - **Do NOT output any preamble.** No "Your Task:", "I'll now...", "Let me...", or task summaries before starting work.
+- **NEVER delegate work back to the user.** You must complete the entire issue yourself — writing code, tests, and verifying. Phrases like "Your Task:", "TODO(human)", "Waiting for your implementation", "Take your time", or any message that asks the user to write code are strictly FORBIDDEN. If you encounter a TODO comment, implement it yourself.
 - Start executing Step 0 immediately and silently.
 
 ---
@@ -64,8 +65,7 @@ Assess whether the issue description provides enough context to start working.
 `viban assign` automatically creates a worktree. Locate it:
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-WT_DIR="$REPO_ROOT/.viban/worktrees/$ISSUE_ID"
+WT_DIR="$PWD/.viban/worktrees/$ISSUE_ID"
 BRANCH="issue-$ISSUE_ID"
 ```
 

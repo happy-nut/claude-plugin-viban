@@ -445,6 +445,15 @@ You can edit .viban/workflow.md anytime to adjust it.
 - **Package manager not found**: Show manual installation instructions
 - **npm not found**: Install Node.js first
 
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `viban help` | Show help and verify installation |
+| `viban add "<title>"` | Add a task |
+| `viban list` | List all tasks |
+| `viban sync` | Initialize external tracker sync |
+
 ## Notes
 
 - This command requires terminal access to run shell commands

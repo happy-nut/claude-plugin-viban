@@ -90,6 +90,14 @@ Report the registered issue and **stop immediately**. Do not suggest next steps,
 - `Bash` for anything other than `viban` CLI and `cat`/`mkdir` above: FORBIDDEN.
 - No `git` commands. No source code reads. No codebase exploration.
 
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `viban list` | Print board (check for duplicates) |
+| `viban add "<title>" --desc-file <f> --priority <p> --type <t>` | Register issue |
+| `viban add "<title>" ... --ext-id "<id>"` | Register with external ID |
+
 ### Additional rules:
 - **NEVER read or write `viban.json` directly** — always use `viban` CLI commands
 - No solution proposals in the issue — symptoms only

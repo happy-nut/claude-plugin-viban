@@ -8,6 +8,8 @@ description: "Assign and resolve multiple independent backlog issues in parallel
 Parallel resolution of independent backlog issues via git worktrees.
 
 > **CLI only** (no direct viban.json access) | **Opus sub-agents** in isolated worktrees
+>
+> **`viban` is a zsh CLI tool.** Always invoke as `viban <command>`, NEVER as `python -m viban` or `python viban`.
 
 **Input**: `$ARGUMENTS` (optional: number of issues, default 3)
 
@@ -16,6 +18,7 @@ Parallel resolution of independent backlog issues via git worktrees.
 ## Output Rules
 
 - **Do NOT output any preamble.** No "Your Task:", "I'll now...", "Let me...", or task summaries before starting work.
+- **NEVER delegate work back to the user.** Each agent must complete its assigned issue fully — writing code, tests, and verifying. Phrases like "Your Task:", "TODO(human)", "Waiting for your implementation", "Take your time", or any message that asks the user to write code are strictly FORBIDDEN. If you encounter a TODO comment, implement it yourself.
 - Start executing Phase 0 immediately and silently.
 
 ---
@@ -75,14 +78,13 @@ If no issues were assigned: notify user and exit.
 For each assigned issue, create an isolated git worktree:
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-mkdir -p "$REPO_ROOT/.viban/worktrees"
+mkdir -p "$PWD/.viban/worktrees"
 
 for entry in "${ISSUES[@]}"; do
     ID="${entry%%|*}"
     BRANCH="${entry##*|}"
     # Use issue ID as worktree dir name (matches cmd_done cleanup at .viban/worktrees/{ID})
-    WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
+    WT_DIR="$PWD/.viban/worktrees/$ID"
 
     git worktree add -b "$BRANCH" "$WT_DIR" origin/main
 done
@@ -106,9 +108,9 @@ Spawn one **opus** agent per issue using `Task` tool. All agents launch in a sin
 You are resolving viban issue #{ID} in an isolated git worktree.
 
 ## Environment
-- Worktree path: {REPO_ROOT}/.viban/worktrees/{ID}
+- Worktree path: {PROJECT_ROOT}/.viban/worktrees/{ID}
 - Branch: {BRANCH}
-- Main repo: {REPO_ROOT}
+- Main repo: {PROJECT_ROOT}
 - ALL file operations must happen inside the worktree path
 
 ## Workflow (Analyze + Implement + Verify only)
@@ -125,7 +127,7 @@ You are resolving viban issue #{ID} in an isolated git worktree.
 
 You are one of {N} parallel agents working in isolated git worktrees.
 
-1. Work ONLY inside your worktree: {REPO_ROOT}/.viban/worktrees/{ID}
+1. Work ONLY inside your worktree: {PROJECT_ROOT}/.viban/worktrees/{ID}
    - cd to the worktree before any work
    - All reads, edits, and writes must target files under this path
 
@@ -136,7 +138,7 @@ You are one of {N} parallel agents working in isolated git worktrees.
 
 3. After implementation, commit on your branch:
    ```bash
-   cd {REPO_ROOT}/.viban/worktrees/{ID}
+   cd {PROJECT_ROOT}/.viban/worktrees/{ID}
    git add <specific files>
    git commit -m "type: description
 
@@ -149,6 +151,7 @@ You are one of {N} parallel agents working in isolated git worktrees.
 4. That's it. Stop after committing.
 
 ABSOLUTE RULES:
+- **NEVER delegate work back to the user.** You must complete the entire issue yourself. Phrases like "Your Task:", "TODO(human)", "Waiting for your implementation" are FORBIDDEN. If you encounter a TODO comment, implement it yourself.
 - **Your job ends after committing.** The coordinator handles push, PR creation, and issue status.
 - **FORBIDDEN: `git push`** — the coordinator pushes from the main repo after verifying.
 - **FORBIDDEN: `gh pr create`** — the coordinator creates PRs after transplanting branches.
@@ -161,7 +164,7 @@ ABSOLUTE RULES:
 
 ### Dispatch Pattern
 
-```python
+```text
 # Pseudo-code for the dispatch
 for each (ID, BRANCH) in ISSUES:
     Task(
@@ -183,12 +186,7 @@ for each (ID, BRANCH) in ISSUES:
 
 ## Phase 3: TRANSPLANT & CLEANUP
 
-After all agents finish, the coordinator handles everything from the main repo root.
-
-```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
-cd "$REPO_ROOT"
-```
+After all agents finish, the coordinator handles everything from the main project root (`$PWD`).
 
 ### 3.1 Verify Local Branches
 

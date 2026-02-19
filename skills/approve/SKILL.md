@@ -29,9 +29,8 @@ viban get $ID
 Confirm the issue is in `review` status. If not, tell the user and exit.
 
 ```bash
-REPO_ROOT=$(git rev-parse --show-toplevel)
 BRANCH="issue-$ID"
-WT_DIR="$REPO_ROOT/.viban/worktrees/$ID"
+WT_DIR="$PWD/.viban/worktrees/$ID"
 ```
 
 ---
@@ -109,3 +108,10 @@ TEMP=$(git log --oneline -1 | grep "viban-review: temp commit before #$ID")
 ```
 
 Report: "Issue #$ID approved and merged."
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `viban get <id>` | View issue details |
+| `viban done <id>` | Mark issue as done |

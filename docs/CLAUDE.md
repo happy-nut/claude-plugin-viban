@@ -64,11 +64,10 @@ EOF
 
 ```bash
 # 1. 워크트리 생성
-REPO_ROOT=$(git rev-parse --show-toplevel)
-git worktree add -b issue-{ISSUE_ID} "$REPO_ROOT/.viban/worktrees/{ISSUE_ID}" origin/main
+git worktree add -b issue-{ISSUE_ID} "$PWD/.viban/worktrees/{ISSUE_ID}" origin/main
 
 # 2. 워크트리 안에서 작업 후 push
-cd "$REPO_ROOT/.viban/worktrees/{ISSUE_ID}"
+cd "$PWD/.viban/worktrees/{ISSUE_ID}"
 git push -u origin issue-{ISSUE_ID}
 
 # 3. PR 생성

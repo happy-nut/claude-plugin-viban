@@ -149,18 +149,14 @@ export TERM=${TERM:-xterm-256color}
 # ============================================================
 # Priority:
 # 1. VIBAN_DATA_DIR env var (explicit override)
-# 2. Project root .viban/ directory
+# 2. CWD .viban/ directory (always uses $PWD, not git root — monorepo safe)
 
 VIBAN_DATA_DIR="${VIBAN_DATA_DIR:-}"
 VIBAN_IS_GIT_REPO=false
 git rev-parse --git-dir &>/dev/null && VIBAN_IS_GIT_REPO=true
 
 if [[ -z "$VIBAN_DATA_DIR" ]]; then
-    if $VIBAN_IS_GIT_REPO; then
-        VIBAN_DATA_DIR="$(git rev-parse --show-toplevel)/.viban"
-    else
-        VIBAN_DATA_DIR="${PWD}/.viban"
-    fi
+    VIBAN_DATA_DIR="${PWD}/.viban"
 fi
 
 VIBAN_JSON="${VIBAN_DATA_DIR}/viban.json"
